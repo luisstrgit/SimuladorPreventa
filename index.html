@@ -1,0 +1,2802 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+  SIMULADOR AC MÓVIL · PREVENTA — Proyecto PA1 (equipo Zebra)
+  ════════════════════════════════════════════════════════════════════════════
+  Archivo único y autocontenido: HTML + CSS + JavaScript, sin dependencias.
+  Practica el flujo de preventa real: login → sincronizar → clientes →
+  pedido → enviar, y muestra qué ocurre después de Enviar (CDA, facturas
+  de SAP, orden de reparto y carga del camión). Incluye la suite de 27
+  pruebas de calidad embebida (botón "Ejecutar pruebas de calidad").
+
+  ── MAPA DEL CÓDIGO ────────────────────────────────────────────────────────
+
+    CSS   → 16 bloques temáticos, en el mismo orden en que se pintan:
+            1 tema/variables · 2 reset · 3 página · 4 teléfono · 5 barra
+            de estado · 6 pantalla · 7 mosaicos · 8 pie · 9 listas ·
+            10 formularios · 11 botón de acción · 12 diálogos · 13 tablas ·
+            14 paginación/mensajes · 15 guía · 16 post-Enviar y QA.
+            Busca las marcas:   ── BLOQUE n ──
+
+    HTML  → 4 piezas contenedoras: el teléfono #scr (la app se dibuja
+            aquí), la guía de práctica #gd, el panel post-Enviar #cda
+            y el panel de resultados de pruebas #qa.
+
+    JS    → 14 secciones numeradas:
+             S1  Utilidades            S8  Diálogos, render y navegación
+             S2  Datos maestros        S9  Cálculos pedido+metas
+             S3  Iconos SVG            S10 Panel post-Enviar (CDA)
+             S4  Semilla de demo       S11 Suite de pruebas QA (23)
+             S5  Estado y arranque     S12 Registro de comunicación
+             S6  Ayudas de render      S13 Acciones del usuario
+             S7  Vistas (pantallas)    S14 Delegación de clics
+            Busca las marcas:   ═══ SECCIÓN n: … ═══
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Simulador AC Móvil – Preventa</title>
+
+  <style>
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 1: TEMA — VARIABLES DE COLOR (modo claro y oscuro)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  :root {
+    /* Paleta del modo claro */
+    --bg: #faf8f6;
+    --card: #fff;
+    --tx: #1c1b1a;
+    --mu: #6b6761;
+    --ac: #c8102e;
+    --bd: #e6e1db;
+
+    /* Ajustes globales de la raíz (pantallas con notch y modo de color) */
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light;
+  }
+
+  /* Oscuro automático: si el sistema usa modo oscuro y el usuario
+     no ha forzado el claro con data-theme="light" */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161514;
+      --card: #201f1d;
+      --tx: #f1eeea;
+      --mu: #a29d95;
+      --ac: #ff5a6e;
+      --bd: #37342f;
+      color-scheme: dark;
+    }
+  }
+
+  /* Oscuro forzado con data-theme="dark" */
+  :root[data-theme="dark"] {
+    --bg: #161514;
+    --card: #201f1d;
+    --tx: #f1eeea;
+    --mu: #a29d95;
+    --ac: #ff5a6e;
+    --bd: #37342f;
+    color-scheme: dark;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 2: RESET Y ESTILOS BASE
+     ═══════════════════════════════════════════════════════════════════ */
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--tx);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 3: PÁGINA — CABECERA Y DISPOSICIÓN GENERAL
+     ═══════════════════════════════════════════════════════════════════ */
+
+  h1 {
+    margin: 0;
+    font-size: clamp(22px, 4vw, 30px);
+    color: var(--ac);
+  }
+
+  header {
+    max-width: 980px;
+    margin: auto;
+    padding: 22px 16px 6px;
+  }
+
+  header p {
+    margin: 4px 0 0;
+    color: var(--mu);
+  }
+
+  /* Contenedor: teléfono + guía + paneles, centrados y envolventes */
+  .wrap {
+    max-width: 980px;
+    margin: auto;
+    padding: 12px 16px 40px;
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 4: TELÉFONO ZEBRA (marco simulado del equipo)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .ph {
+    width: 340px;
+    height: 700px;
+    background: #15171a;
+    border-radius: 30px;
+    padding: 50px 11px 46px;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    flex: none;
+    border: 2px solid #2b2e33;
+  }
+
+  /* Marca "ZEBRA" grabada arriba del marco */
+  .ph:before {
+    content: "ZEBRA";
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #e8e8e8;
+    font: 700 16px Arial;
+    letter-spacing: 1px;
+  }
+
+  /* Botones de navegación del equipo (atrás · inicio · recientes) */
+  .nv {
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    color: #777;
+    font-size: 16px;
+  }
+
+  .nv span {
+    cursor: pointer;
+    padding: 0 20px;
+  }
+
+  /* Pantalla del equipo: aquí la app se dibuja por completo */
+  #scr {
+    height: 100%;
+    background: #000;
+    color: #eee;
+    position: relative;
+    overflow: hidden;
+    font: 13px/1.3 Roboto, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    border-radius: 3px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 5: BARRA DE ESTADO (hora · señal · batería)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .sb {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 2px 6px;
+    color: #ddd;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 6: CABECERA Y CUERPO DE CADA PANTALLA
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .hd {
+    background: #cfd2da;
+    color: #111;
+    padding: 6px 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 0 4px;
+  }
+
+  .hd i {
+    color: #c8102e;
+    font-style: normal;
+    font-size: 20px;
+  }
+
+  .hd b {
+    display: block;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .hd small {
+    font-size: 12px;
+  }
+
+  /* Cuerpo desplazable de la pantalla */
+  .bd {
+    flex: 1;
+    overflow: auto;
+    padding: 5px 4px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 7: MENÚ DE MOSAICOS (cuadrícula de 4 columnas)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .gm {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 64px;
+    gap: 5px;
+    grid-auto-flow: dense;
+  }
+
+  /* Cuadrícula de 2 columnas (pantallas secundarias) */
+  .g2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 84px;
+    gap: 6px;
+  }
+
+  /* Mosaico base */
+  .t {
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #111;
+    background: linear-gradient(#e3e5ea, #a5abb8);
+    cursor: pointer;
+    padding: 2px;
+    line-height: 1.15;
+  }
+
+  .t b {
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .t em {
+    font-style: normal;
+    font-size: 20px;
+  }
+
+  /* Variantes de color: rojo y verde */
+  .r {
+    background: linear-gradient(#ec3a3a, #a30f0f);
+    color: #fff;
+  }
+
+  .g {
+    background: linear-gradient(#3cba3c, #087008);
+    color: #fff;
+  }
+
+  /* Expansiones de la cuadrícula: ancho doble y alto doble */
+  .w2 {
+    grid-column: span 2;
+  }
+
+  .h2 {
+    grid-row: span 2;
+  }
+
+  /* Donut del Score Card: dos colores (atendidas / por visitar). El porcentaje
+     llega en la variable --p desde el menú y el número se escribe en el <span>. */
+  .donut {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: conic-gradient(#3cba3c 0 var(--p, 0%), #6a6f7a var(--p, 0%) 100%);
+    display: grid;
+    place-items: center;
+  }
+
+  .donut span {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #c5c9d2;
+    color: #111;
+    font-size: 12px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+
+  /* Texto pequeño bajo el número de un mosaico */
+  .t small {
+    display: block;
+    font-size: 8px;
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 8: PIE DE PANTALLA (barra de iconos)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .ft {
+    display: flex;
+    justify-content: space-between;
+    background: #cfd2da;
+    color: #111;
+    margin: 0 4px 4px;
+    padding: 6px 8px;
+    font-size: 20px;
+  }
+
+  .ft span {
+    cursor: pointer;
+  }
+
+  .ft svg {
+    display: block;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 9: LISTAS — CLIENTES Y ESTADOS
+             (✓ pedido · ⏳ pendiente · ✕ no pidió)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 4px;
+    border-bottom: 1px solid #222;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .row:hover {
+    background: #111;
+  }
+
+  /* Recuadro del estado (marca) */
+  .mk {
+    width: 26px;
+    height: 26px;
+    border: 1px solid #888;
+    border-radius: 3px;
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    flex: none;
+    background: #ddd;
+    color: #333;
+  }
+
+  .mk.s {
+    background: #e33;
+    gap: 0;
+  }
+
+  .mk.o {
+    background: #f90;
+    color: #000;
+    font-size: 12px;
+  }
+
+  .mk.k {
+    background: #2b2;
+    color: #000;
+    font-size: 14px;
+  }
+
+  /* Barra resumen: programados · visitados · por visitar */
+  .st {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+    font-size: 11px;
+    color: #ccc;
+    padding: 4px 0;
+  }
+
+  .st b {
+    display: block;
+    font-size: 15px;
+    color: #fff;
+  }
+
+  .row svg {
+    color: #aaa;
+    flex: none;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 10: FORMULARIOS — CAMPOS, RADIOS Y ADJUNTOS
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Opción tipo radio (motivos) */
+  .rad {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .rad u {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #aaa;
+    border-radius: 50%;
+    display: block;
+  }
+
+  .rad.on u {
+    background: radial-gradient(#fff 35%, #4a8 40%);
+    border-color: #4a8;
+  }
+
+  /* Campo en línea: etiqueta a la izquierda, valor a la derecha */
+  .fld {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 6px;
+    gap: 8px;
+  }
+
+  .fld input {
+    width: 96px;
+    background: #111;
+    border: 1px solid #556;
+    color: #fff;
+    padding: 6px;
+    border-radius: 3px;
+    font-size: 15px;
+    text-align: right;
+  }
+
+  /* Campo apilado (alta de cliente) */
+  .fa {
+    padding: 4px 6px;
+  }
+
+  .fa span {
+    display: block;
+    font-size: 11px;
+    color: #aab;
+  }
+
+  .fa input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #556;
+    color: #fff;
+    padding: 7px;
+    border-radius: 3px;
+    font-size: 14px;
+  }
+
+  /* Botón pastilla para adjuntar documentos */
+  .att {
+    background: #334;
+    color: #fff;
+    border-radius: 12px;
+    padding: 4px 9px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 11: BOTÓN GRANDE DE ACCIÓN
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .big {
+    background: #9aa1b3;
+    color: #111;
+    text-align: center;
+    font-size: 22px;
+    padding: 8px;
+    margin: 6px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 12: DIÁLOGOS MODALES (promociones y confirmaciones)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Fondo oscurecido que cubre la pantalla */
+  .ov {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    z-index: 3;
+  }
+
+  /* Caja del diálogo */
+  .dl {
+    background: #c6d4e6;
+    color: #111;
+    width: 100%;
+    font-size: 13px;
+    padding: 12px;
+    border-radius: 3px;
+  }
+
+  .dl h4 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: 500;
+  }
+
+  .dl .it {
+    padding: 8px 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .dl .it.on {
+    font-weight: 700;
+  }
+
+  .dl .bt {
+    display: flex;
+    justify-content: flex-end;
+    gap: 14px;
+    margin-top: 10px;
+    font-weight: 700;
+    flex-wrap: wrap;
+  }
+
+  .bt span {
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 13: TABLAS DEL PEDIDO Y TOTALES
+             (SKU · cajas · botellas · importe)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Barra de herramientas sobre la tabla del pedido */
+  .tb {
+    display: flex;
+    justify-content: space-between;
+    background: #cfd2da;
+    color: #111;
+    margin: 0 4px;
+    padding: 6px 10px;
+    font-size: 19px;
+  }
+
+  .tb span {
+    cursor: pointer;
+  }
+
+  /* Recuadro de totales (cajas · botellas · subtotal · IGV · total) */
+  .tot {
+    background: #bcdcec;
+    color: #111;
+    margin: 4px;
+    padding: 6px 8px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 14px;
+    font-size: 11.5px;
+  }
+
+  .tot div {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Tabla genérica (CDA / facturas / reparto) */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+    color: #ddd;
+  }
+
+  th {
+    text-align: left;
+    font-weight: 500;
+    color: #aab;
+    padding: 4px 2px;
+  }
+
+  td {
+    padding: 4px 2px;
+    border-top: 1px solid #222;
+  }
+
+  /* Tabla compacta "lv" del levantamiento de pedido */
+  .lv {
+    table-layout: fixed;
+  }
+
+  .lv td {
+    padding: 2px 1px;
+    font-size: 9.5px;
+    vertical-align: middle;
+    line-height: 1.1;
+  }
+
+  .lv th {
+    font-size: 9.5px;
+    padding: 3px 1px;
+  }
+
+  .lv input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #556;
+    color: #fff;
+    padding: 5px 1px;
+    font-size: 11.5px;
+    border-radius: 2px;
+    text-align: center;
+  }
+
+  .lv .x {
+    color: #f77;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .lv select {
+    width: 100%;
+    background: #111;
+    color: #fff;
+    border: 1px solid #556;
+    font-size: 9px;
+    padding: 5px 0;
+    border-radius: 2px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 14: PAGINACIÓN POR PUNTOS Y MENSAJES (log · ok · toast)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Puntos que cambian de página en el pedido */
+  .dots {
+    text-align: center;
+    padding: 3px;
+  }
+
+  .dots span {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid #aaa;
+    margin: 0 3px;
+    cursor: pointer;
+  }
+
+  .dots span.on {
+    background: #ddd;
+  }
+
+  /* Líneas del registro de comunicación */
+  .lg {
+    color: #2e2;
+    padding: 3px 10px;
+    font-size: 12.5px;
+  }
+
+  /* Aviso grande "COMUNICACIÓN EFECTUADA CORRECTAMENTE" */
+  .ok {
+    color: #2e2;
+    text-align: center;
+    padding: 30px 10px 6px;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  /* Mensaje flotante inferior */
+  .toast {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 46px;
+    background: #ddd;
+    color: #111;
+    padding: 9px 11px;
+    border-radius: 18px;
+    font-size: 12.5px;
+    z-index: 5;
+    text-align: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 15: GUÍA DE PRÁCTICA (panel derecho)
+     ═══════════════════════════════════════════════════════════════════ */
+
+  .gd {
+    flex: 1;
+    min-width: 280px;
+    max-width: 520px;
+    background: var(--card);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 18px;
+  }
+
+  .gd h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+  }
+
+  .gd p {
+    margin: 6px 0;
+  }
+
+  /* Recuadro de consejo (tiempo del último pedido) */
+  .tip {
+    background: var(--bg);
+    border-left: 3px solid var(--ac);
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: var(--mu);
+    font-size: 14px;
+  }
+
+  /* Lista de pasos del flujo */
+  .gd ol {
+    padding-left: 0;
+    list-style: none;
+    margin: 14px 0;
+  }
+
+  .gd li {
+    display: flex;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: 8px;
+    color: var(--mu);
+    font-size: 14px;
+  }
+
+  /* Número de paso dentro de un círculo */
+  .gd li b {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--bd);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    flex: none;
+  }
+
+  /* Paso actual (resaltado) y paso completado (verde) */
+  .gd li.on {
+    background: var(--bg);
+    color: var(--tx);
+    font-weight: 600;
+  }
+
+  .gd li.on b {
+    background: var(--ac);
+    color: #fff;
+    border-color: var(--ac);
+  }
+
+  .gd li.d b {
+    background: #2a8a3a;
+    color: #fff;
+    border-color: #2a8a3a;
+  }
+
+  /* Botones redondeados de la guía (pruebas · cobertura · reinicio) */
+  button.rs {
+    background: none;
+    border: 1px solid var(--bd);
+    color: var(--tx);
+    padding: 7px 14px;
+    border-radius: 99px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  button.rs:hover {
+    border-color: var(--ac);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 16: PANEL POST-ENVIAR (CDA) Y PRUEBAS QA
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Panel ancho compartido por #cda y #qa (oculto hasta que se usa) */
+  .cda {
+    flex: 1 1 100%;
+    max-width: 940px;
+    background: var(--card);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 18px;
+    display: none;
+  }
+
+  .cda h3 {
+    margin: 0 0 8px;
+  }
+
+  .cda h4 {
+    margin: 16px 0 6px;
+    font-size: 15px;
+  }
+
+  /* Tubería de nodos: equipo → middleware → CDA → SAP → logística */
+  .pipe {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .nd {
+    padding: 8px 10px;
+    border: 1px solid var(--bd);
+    border-radius: 10px;
+    opacity: .35;
+    transition: .4s;
+    font-size: 13px;
+    text-align: center;
+    flex: 1;
+    min-width: 110px;
+  }
+
+  .nd.on {
+    opacity: 1;
+    border-color: var(--ac);
+    background: var(--bg);
+  }
+
+  .ar {
+    opacity: .5;
+  }
+
+  /* Tablas dentro del panel (con desplazamiento horizontal) */
+  .cda table {
+    display: block;
+    overflow-x: auto;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    color: var(--tx);
+  }
+
+  .cda th {
+    color: var(--mu);
+    text-align: left;
+    padding: 5px 8px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .cda td {
+    padding: 5px 8px;
+    border-top: 1px solid var(--bd);
+    vertical-align: top;
+  }
+
+  /* Línea de estado de la transmisión */
+  .cda .st {
+    display: block;
+    font-weight: 600;
+    color: var(--ac);
+    margin: 10px 0 0;
+    text-align: left;
+    font-size: 14px;
+  }
+
+  /* Resultado de cada prueba: aprobada (verde) / fallida (rojo) */
+  .pas {
+    color: #2a8a3a;
+    font-weight: 700;
+  }
+
+  .fal {
+    color: #c00;
+    font-weight: 700;
+  }
+
+  .note {
+    color: var(--mu);
+    font-size: 12px;
+  }
+  
+  /* ═══════════════════════════════════════════════════════════════════
+     BLOQUE 17: RESÚMENES — indicadores, barras y orden ICE (sin iconos)
+     Estilo minimalista: texto, barras y tablas. Se usa en las vistas
+     ice, saldos, resdia, resmes, cump y frio.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Título de sección dentro de una pantalla */
+  .sec { color: #aab; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 12px 6px 4px; }
+
+  /* Párrafo informativo */
+  .tx { color: #ccc; font-size: 12px; margin: 2px 6px 6px; }
+
+  /* Indicador: etiqueta a la izquierda, cifra a la derecha */
+  .kpi { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 6px 3px; color: #ccc; font-size: 12px; }
+  .kpi b { color: #fff; font-size: 15px; }
+
+  /* Barra de progreso (el ancho se fija en línea según el porcentaje) */
+  .bar { height: 8px; background: #2a2d33; border-radius: 4px; margin: 0 6px 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #3cba3c; border-radius: 4px; }
+
+  /* Tabla compacta de listas (saldos y equipo frío) */
+  .mini { width: 100%; border-collapse: collapse; font-size: 11.5px; color: #ddd; }
+  .mini th { text-align: left; color: #aab; font-weight: 500; padding: 4px 6px; }
+  .mini td { padding: 6px; border-top: 1px solid #222; vertical-align: top; }
+  .mini small { display: block; color: #888; font-size: 10px; }
+
+  /* Esquema de la refrigeradora: tres repisas (ICE) */
+  .fr { margin: 6px; border: 2px solid #667; border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 6px; background: #15181d; }
+  .shelf { display: flex; gap: 6px; border-bottom: 2px solid #445; padding-bottom: 6px; }
+  .shelf:last-child { border-bottom: 0; padding-bottom: 0; }
+  .shelf b { flex: 1; background: #262a31; border-radius: 4px; padding: 9px 4px; text-align: center; font-size: 11px; color: #fff; font-weight: 600; }
+</style>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       ESTRUCTURA DE LA PÁGINA (ver <body> más abajo)
+       La app se dibuja dinámicamente dentro de #scr (pantalla del equipo),
+       la guía en #gd y los paneles #cda / #qa se llenan al usarlos.
+       ══════════════════════════════════════════════════════════════════ -->
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       ESTRUCTURA DE LA PÁGINA
+       ══════════════════════════════════════════════════════════════════ -->
+
+  <!-- Cabecera con el título del simulador -->
+  <header>
+    <h1>Simulador AC Móvil</h1>
+    <p>Practica el flujo de preventa en un equipo Zebra virtual: cliente, pedido, sincronizar y enviar. Datos de demostración.</p>
+  </header>
+
+  <div class="wrap">
+
+    <!-- (1) Teléfono Zebra: marco del equipo; la app se dibuja en #scr -->
+    <div class="ph">
+      <div id="scr"></div>
+      <div class="nv">
+        <span data-a="back">◀</span>
+        <span data-a="home">●</span>
+        <span>■</span>
+      </div>
+    </div>
+
+    <!-- (2) Guía de práctica: paso a paso y botones de ayuda -->
+    <div class="gd" id="gd"></div>
+
+    <!-- (3) Panel "Qué pasa después de Enviar": CDA → SAP → reparto -->
+    <section class="cda" id="cda"></section>
+
+    <!-- (4) Resultados de la suite de pruebas de calidad (23 casos) -->
+    <section class="cda" id="qa"></section>
+
+  </div>
+
+  <script>
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 1: UTILIDADES GENERALES
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Atajo: primer elemento que coincide con el selector
+  const $ = s => document.querySelector(s);
+
+  // Formato de moneda: 115.5 → "$115.50"
+  const fm = n => '$' + n.toFixed(2);
+
+  // Deja solo dígitos en un campo de texto (se llama desde oninput)
+  const dg = el => { el.value = el.value.replace(/\D/g, '') };
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 2: DATOS MAESTROS (catálogo, clientes, promociones, guía)
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Catálogo central: SKU → [descripción, precio por caja ($), botellas por caja,
+  //                          mililitros por botella, marca]
+  // Para cambiar un precio solo se edita aquí (prueba M2 lo verifica).
+  // Los mililitros sirven para calcular los litros de la cuota (prueba U9).
+  const CAT = {
+    123: ['INCA KOLA VR192X24',   17.29, 24,  192, 'Inca Kola'],
+    124: ['COCA COLA PET 1L X9',  38.5,   9, 1000, 'Coca-Cola'],
+    125: ['INCA KOLA PET 1L X9',  38.5,   9, 1000, 'Inca Kola'],
+    126: ['SAN LUIS 600ML X15',   14.2,  15,  600, 'San Luis'],
+    127: ['FRUGOS VALLE 1L X6',   21.9,   6, 1000, 'Frugos'],
+    128: ['SPORADE 500ML X12',    22.4,  12,  500, 'Sporade']
+  };
+
+  // Marcas que se muestran en los resúmenes, en este orden
+  const MARCAS = ['Coca-Cola', 'Inca Kola', 'San Luis', 'Frugos', 'Sporade'];
+
+  // ── Metas y cifras base del mes (demostración) ──
+  // Cuota mensual en litros = litros por visita × visitas por día × días.
+  // Ejemplo: 2 cajas de 9 botellas de 1 L = 18 L por visita; 18 × 41 = 738 L al día;
+  // 738 × 30 días = 22 140 L al mes.
+  const CFG = {
+    visitasDia: 41,        // bodegas programadas por día
+    litrosVisita: 18,      // mínimo de litros por visita (2 cajas × 9 L)
+    diasCuota: 30,         // días con que se calcula la cuota mensual
+    diasVisita: 24,        // lunes a sábado × 4 semanas (visitas del mes)
+    litrosPrevios: 9000,   // litros acumulados en días anteriores del mes (demo)
+    visitasPrevias: 312,   // bodegas atendidas en días anteriores del mes (demo)
+    marcasPrevias: { 'Coca-Cola': .35, 'Inca Kola': .30, 'San Luis': .15, 'Frugos': .12, 'Sporade': .08 }
+  };
+  CFG.cuotaMes = CFG.litrosVisita * CFG.visitasDia * CFG.diasCuota;   // 22 140 L
+  CFG.visitasMes = CFG.visitasDia * CFG.diasVisita;                   // 984 bodegas
+
+  // Saldos (crédito hasta fin de mes) y equipos fríos prestados, en el mismo orden que NM
+  const SALDOS = [0, 0, 0, 1000, 0, 0, 0, 500, 0, 300, 0, 0];
+  const FRIO = ['', '', 'EF-104-0231', '', 'EF-104-0378', '', '', '', 'EF-104-0412', '', '', ''];
+
+  // Clientes de la ruta: [nombre, tipo de tienda, dirección] (12 de 41, demo)
+  const NM = [
+    ['BODEGA LA ESQUINA',    'MI MICRO',  'Jr. Real 345, Huancayo'],
+    ['MINIMARKET DON PEPE',  'GR GRANDE', 'Av. Ferrocarril 1020, Huancayo'],
+    ['TIENDA SANTA ROSA',    'BODEGA',    'Calle Lima 210, El Tambo'],
+    ['BODEGA EL PROGRESO',   'MI MICRO',  'Av. Mariscal Castilla 880, El Tambo'],
+    ['ABARROTES LUCHITO',    'BODEGA',    'Jr. Cusco 560, Huancayo'],
+    ['MI MICRO LA UNION',    'MI MICRO',  'Psje. Los Andes 112, Chilca'],
+    ['BODEGA SAN JOSE',      'BODEGA',    'Av. Huancavelica 735, Huancayo'],
+    ['TIENDA MARIA ELENA',   'MI MICRO',  'Jr. Ica 418, Huancayo'],
+    ['MINIMARKET LOS ANDES', 'GR GRANDE', 'Av. Giraldez 960, Huancayo'],
+    ['BODEGA EL SOL',        'BODEGA',    'Calle Real 1305, Chilca'],
+    ['ABARROTES EL TRIGAL',  'BODEGA',    'Jr. Arequipa 250, Huancayo'],
+    ['TIENDA JESUS MARIA',   'MI MICRO',  'Av. Leoncio Prado 600, Huancayo']
+  ];
+
+  // Promociones del diálogo dentro del pedido: [código, detalle]
+  const PR = [
+    ['PORT750-19%_CH010',
+     'POR LA COMPRA DE 1 CF (BOTELLA) DE PISCO PORTON 750ML SE OTORGARÁ EN LAS SIGUIENTES ESCALAS: POR LA COMPRA DE 1 BOTELLA A 239 SE OTORGA 12%. POR LA COMPRA DE 240 BOTELLAS A MÁS 19%'],
+    ['C194M_CC/IK600 ML SA_12%',
+     '12 % de descuento en presentaciones de 600 ml. (Detalle de demostración.)'],
+    ['C260M_SDG_CORE + SAB192',
+     'Por la compra de un paquete de producto core se otorga un paquete de 192 ml. (Detalle de demostración.)'],
+    ['C141M_SL500 ML_14%_2CF',
+     '14 % de descuento en 500 ml desde 2 cajas. (Detalle de demostración.)']
+  ];
+
+  // Promociones vigentes de la ruta (vista "Promociones"): [título, detalle]
+  const PL = [
+    ['Agua San Luis + Inca Kola 192 ml',
+     'Por la compra de 5 paquetes de agua mineral San Luis se obtiene 1 paquete de Inca Kola de 192 ml.'],
+    ['Descuento por volumen',
+     'Por la compra de más de 2 cajas se otorga 12 % de descuento.'],
+    ['Bodega elegida',
+     'Al completar 100 cajas en el mes, el cliente recibe un paquete de agua San Luis.']
+  ];
+
+  // Pasos del flujo que muestra la guía de práctica
+  const FLOW = [
+    'Iniciar sesión con el código',
+    'Sincronizar para cargar la ruta',
+    'Abrir Clientes y elegir uno',
+    'Ver el sticker y entrar al cliente (o dar el motivo)',
+    'Transacciones › Pedidos',
+    'Cargar productos (＋), ✓ y Confirmar',
+    'Sincronizar › Enviar (Fin de Ruta al cerrar el día)',
+    'Siguiente cliente'
+  ];
+
+  // Texto de la guía por pantalla: [título, explicación, paso actual del flujo]
+  const G = {
+    login:    ['Iniciar sesión', 'El vendedor escribe su código y entra. Aquí sirve cualquier número.', 0],
+    menu:     ['Menú principal', 'Cuota y Venta Acumulada muestra los litros del mes contra la cuota de 22 140 L. Score Card Diario solo muestra las bodegas atendidas hoy. Toca Saldos, Cumplimiento, Prioridades ICE, Resumen del día, Resumen mensual o Inventario equipo frío para ver el detalle. Sincronizar y Clientes siguen el flujo del pedido.', 1],
+    sync:     ['Tipo de comunicación', 'Enviar manda los pedidos. Fin de Ruta manda todo lo del día y cierra la ruta. Sincronismo Contingente manda lo guardado cuando vuelve el internet (prueba el botón "Simular zona sin cobertura").', 6],
+    log:      ['Enviando…', 'Se ve el proceso hasta "Comunicación efectuada correctamente". Toca OK.', 6],
+    clients:  ['Lista de clientes', 'Programados, visitados y por visitar. X = no pidió; cuadros de color = ya pidió. Toca un cliente para entrar directo a su ventana: el vendedor identifica la bodega viendo el sticker.', 2],
+    motivo:   ['Motivo sin sticker', 'Elige el motivo (sin sticker, dañado, zona peligrosa…) y guarda con el disquete: regresas al panel del cliente.', 3],
+    panel:    ['Ventana del cliente', 'Indicadores del cliente: cuota, ICE, crédito, órdenes de trabajo. Lo importante es Transacciones. Si el cliente no tiene sticker, usa el mosaico No Código de Barras. Pedidos Digitales trae lo pedido en la app Tu Aliado.', 3],
+    trans:    ['Transacciones', 'Pedidos para vender. No Pedido si no compra. No Visita si no se pudo visitar.', 4],
+    promo:    ['Promociones del cliente', 'Al entrar a Pedidos se muestran las promociones. Léelas y toca Cerrar.', 4],
+    ped0:     ['Saldos', 'Saldo anterior, saldo actual y límite de crédito. La mayoría paga al recibir el reparto. Desliza (usa los puntos de abajo) al levantamiento.', 4],
+    lev:      ['Levantamiento de pedido', 'Tabla horizontal: escribe el SKU (123 a 128), cajas y botellas; el importe sale solo. Con ＋ agregas otra fila. Abajo sale el total con promoción e IGV. Al terminar todos los productos toca ✓.', 5],
+    alta:     ['Alta de cliente nuevo', 'Pide DNI, nombre, dirección y documentos (recibo de luz o agua, foto de DNI). Al guardar y enviar va al CDA y luego al SAP: el cliente aparece como nuevo en la lista.', 2],
+    resumen:  ['Resumen del pedido', 'Detalle en tabla con el total abajo. Toca Confirmar: vuelves hasta la ruta; luego Sincronizar › Enviar.', 5],
+    sku:      ['Agregar producto', 'Escribe el SKU (prueba 123, 124, 125, 126, 127 o 128): la descripción sale sola. Pon cajas y/o botellas y toca ✓.', 5],
+    cambio:   ['Cambio de producto', 'Igual que un pedido, pero guarda lo que se cambia: escribe SKU, cajas y botellas y elige el motivo (merma, vencido o defectuoso). Con ＋ agregas filas y con ✓ ves el resumen.', 4],
+    cresumen: ['Resumen del cambio', 'Detalle en tabla con los totales. Confirmar guarda el cambio y regresa a la ruta; se envía al sincronizar.', 5],
+    promos:   ['Promociones vigentes', 'Lista de las promociones de la ruta. Dentro de un pedido también están en el botón del regalo, arriba.', 1],
+    ice:      ['Prioridades ICE', 'Información de marketing: cómo ordenar afiches, refrigeradora y gaseosas en la bodega.', 1],
+    saldos:   ['Saldos', 'Clientes con crédito hasta fin de mes y la suma total, que es la cifra del mosaico.', 1],
+    resdia:   ['Resumen del día', 'Bodegas visitadas, por visitar y litros recabados hoy por marca. Haz un pedido y vuelve para ver cómo cambia.', 1],
+    resmes:   ['Resumen mensual', 'Bodegas atendidas (de 984) y litros acumulados (de 22 140 L) del mes, con litros por marca.', 1],
+    cump:     ['Cumplimiento mensual', 'Porcentaje de clientes atendidos contra la meta global de 984 visitas al mes, y avance de litros.', 1],
+    frio:     ['Inventario de equipo frío', 'Clientes que tienen una refrigeradora prestada, con su dirección y código.', 1],
+    conf:     ['Confirmar y guardar', 'Con el ✓ de arriba se confirma, luego se guarda y se responde Sí.', 5]
+  };
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 3: ICONOS SVG REUTILIZABLES
+     ══════════════════════════════════════════════════════════════════════ */
+
+  const GPS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="7.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>',
+        WIN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/><rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/></svg>';
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 4: SEMILLA DE DEMOSTRACIÓN (pedidos precargados de 3 clientes)
+     ══════════════════════════════════════════════════════════════════════ */
+
+  const SEED = [
+    [{ k: '124', c: 3, b: 0 }, { k: '126', c: 2, b: 0 }],
+    [{ k: '123', c: 4, b: 0 }],
+    [{ k: '125', c: 2, b: 6 }, { k: '128', c: 1, b: 0 }]
+  ];
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 5: ESTADO GLOBAL, RELOJ Y ARRANQUE
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Temporizadores activos del panel CDA (se cancelan en cada envío)
+  let cdaT = [];
+
+  // Estado global de la práctica (se crea en init())
+  let S;
+
+  // Hora actual del equipo, formato HH:MM (Perú)
+  const tm = () => new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+
+  // Crea el estado inicial de la práctica y pinta la primera pantalla
+  function init() {
+    S = {
+      off: false,          // sin cobertura (botón "Simular zona sin cobertura")
+      cambios: [],         // cambios de producto pendientes de enviar
+      cr: [{ k: '', c: '', b: '', m: 'Merma' }],   // filas del cambio de producto
+      extra: 0,            // clientes dados de alta en la práctica
+      altas: [],           // solicitudes de alta pendientes de enviar
+      closed: false,       // ruta cerrada tras el Fin de Ruta
+      rows: [{ k: '', c: '', b: '' }],             // filas del pedido en curso
+      alta: { f: [] },     // formulario de alta de cliente
+      mode: '',            // tipo de comunicación en curso ('x', 'ruta', 'cont')
+      scr: 'login',        // pantalla visible
+      h: [],               // historial de navegación (botón atrás)
+      cur: 0,              // índice del cliente visitado
+      pg: 0,               // página del pedido (0 saldos · 1 levantamiento)
+      dlg: null,           // diálogo modal abierto
+      sync: false,         // ya se sincronizó en esta sesión
+      cart: [],            // carrito interno (uso auxiliar)
+      mot: null,           // motivo "No Código de Barras" elegido
+      psel: 0,             // promoción seleccionada en el diálogo
+      // Clientes de la ruta: st = 2 visitado con pedido · -1 no pidió · 0 pendiente
+      C: NM.map((n, i) => ({
+        n: n[0], t: n[1], dir: n[2], saldo: SALDOS[i], frio: FRIO[i],
+        st: i < 3 ? 2 : i < 6 ? -1 : 0,
+        ord: i < 3 ? { rows: SEED[i] } : null,     // pedidos precargados (demo)
+        fac: i < 3 ? 'F001-00009' + (5 + i) : ''   // facturas de la demo
+      })),
+      fac: 97              // numerador de facturas para el CDA
+    };
+
+    // Oculta los paneles CDA y QA al (re)iniciar la práctica
+    ['cda', 'qa'].forEach(id => {
+      const e = document.getElementById(id);
+      if (e) e.style.display = 'none';
+    });
+
+    render();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 6: AYUDANTES DE RENDER
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // ¿Hay clientes con pedido confirmado pendiente de enviar? (st = 1)
+  const pend = () => S.C.some(c => c.st === 1);
+
+  // Cabecera estándar de pantalla: título + subtítulo
+  const hd = (t, s) => `<div class="hd"><i>◈</i><div><b>${t}</b><small>${s || ''}</small></div></div>`;
+
+  // Totales del carrito auxiliar (S.cart). El pedido real usa totR().
+  const tot = () => {
+    let c = 0, b = 0, s = 0;
+    S.cart.forEach(l => {
+      const p = CAT[l.k];
+      c += l.c;
+      b += l.b;
+      s += l.c * p[1] + l.b * p[1] / p[2];
+    });
+    const pr = c > 2 ? s * .12 : 0;
+    return { c, b, s, pr, i: s - pr };
+  };
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 7: VISTAS DE LA APLICACIÓN (cada pantalla es una función)
+     ══════════════════════════════════════════════════════════════════════ */
+
+  const V = {
+
+    // ── Vista: inicio de sesión — código de vendedor ──────────────────
+    login: () => hd('AC Móvil', 'Preventa') + `
+      <div class="bd">
+        <div class="fld" style="margin-top:50px">
+          <span>Código de vendedor</span>
+          <input id="cod" type="text" inputmode="numeric" value="104" oninput="dg(this)">
+        </div>
+        <div class="big" data-a="login">Ingresar</div>
+      </div>`,
+
+    // ── Vista: menú principal — ruta del día ──────────────────────────
+    menu: () => {
+      const d = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' }),
+            // Fábrica de mosaicos simple (disponible; los mosaicos fijos van escritos abajo)
+            n = (v, l, e, c, x) => `<div class="t ${c || ''}" ${x || ''}>${e}${l}</div>`,
+            na = m => `data-a="na" data-v="${m}"`,
+            q = S.C.filter(c => c.st === 1).length + S.cambios.length;
+      return hd('RUTA 104' + (S.closed ? ' · CERRADA' : ''), d) + `
+        <div class="bd">
+          <div class="gm">
+            <!-- Cuota mensual en litros: litros acumulados ÷ 22 140 L -->
+            <div class="t ${cuotaPct() >= 60 ? 'g' : 'r'}" ${na('Cuota del mes: ' + lt(litrosMes()) + ' de ' + lt(CFG.cuotaMes) + ' (18 L por visita × 41 visitas × 30 días).')}>
+              <b>${cuotaPct()}%</b>Cuota y Venta Acumulada<small>${lt(litrosMes())} / ${lt(CFG.cuotaMes)}</small>
+            </div>
+            <!-- Prioridades de marketing (ICE) -->
+            <div class="t" data-a="ice">
+              Prioridades ICE
+            </div>
+            <!-- Score diario: solo muestra, no abre nada. Dos colores: atendidas / por visitar -->
+            <div class="t w2 h2">
+              <div class="donut" style="--p:${scoreDia()}%"><span>${scoreDia()}%</span></div>Score Card Diario<small>${visitadas()} de ${programadas()} bodegas atendidas</small>
+            </div>
+            <!-- Saldos: suma de los créditos de los clientes -->
+            <div class="t g" data-a="saldos">
+              <b>$${saldoTotal().toLocaleString('en-US')}</b>Saldos
+            </div>
+            <!-- Cumplimiento mensual de bodegas atendidas -->
+            <div class="t ${cumplMes() >= 60 ? 'g' : 'r'}" data-a="cump">
+              <b>${cumplMes()}%</b>Cumplimiento
+            </div>
+            <div class="t" ${na('Mensajes (no se usan).')}>
+              <b>0</b>Mensajes
+            </div>
+            <div class="t" data-a="sync">
+              <em>🔄</em>Sincronizar${q ? `<small style="color:#c00">${q} por enviar</small>` : ''}
+            </div>
+            <div class="t w2 h2" data-a="clients">
+              <em style="font-size:46px">👥</em>Clientes
+            </div>
+            <div class="t" data-a="resdia">
+              Resumen del día
+            </div>
+            <div class="t" data-a="resmes">
+              Resumen mensual
+            </div>
+            <div class="t" data-a="frio">
+              <b>${S.C.filter(c => c.frio).length}</b>Inventario equipo frío
+            </div>
+            <div class="t" ${na('Fundamentales acumulados.')}>
+              <em>✅</em>Fundamentales
+            </div>
+            <div class="t" data-a="promos">
+              <em>🎁</em>Promociones
+            </div>
+          </div>
+        </div>`;
+    },
+
+    // ── Vista: tipo de comunicación — sincronización ──────────────────
+    sync: () => hd('AC Móvil', 'Tipo de comunicación') + `
+      <div class="bd">
+        <div class="g2">
+          <div class="t" data-a="send">
+            <em>📤</em>Enviar
+          </div>
+          <div class="t" data-a="finq">
+            <em>🚚</em>Fin de Ruta
+          </div>
+          <div class="t" data-a="na" data-v="Inicio de reunión.">
+            <em>👥</em>Inicio de Reunión
+          </div>
+          <div class="t" data-a="na" data-v="Descarga parcial de datos.">
+            <em>⬇️</em>Descarga Parcial
+          </div>
+          <div class="t" data-a="cont">
+            <em>🔁</em>Sincronismo Contingente
+          </div>
+          <div class="t" data-a="na" data-v="Archivos HTML.">
+            <em>📄</em>Archivos HTML
+          </div>
+        </div>
+      </div>`,
+
+    // ── Vista: registro del envío en curso ────────────────────────────
+    log: () => hd(S.mode === 'ruta' ? 'Fin de Ruta' : S.mode === 'cont' ? 'Sincronismo Contingente' : 'Finalizado', '') + `
+      <div class="bd" style="padding-top:10px">
+        ${S.log.map(l => `<div class="lg">${l}</div>`).join('')}
+        ${S.logOk ? `<div class="ok">COMUNICACIÓN EFECTUADA CORRECTAMENTE</div>
+        <div class="big" data-a="fin">OK</div>` : ''}
+      </div>`,
+
+    // ── Vista: lista de clientes de la ruta ───────────────────────────
+    clients: () => {
+      const v = S.C.filter(c => c.st !== 0).length;
+      return hd('Clientes', '') + `
+        <div class="st">
+          <span>Sábado</span>
+          <span>ACD<b>0</b></span>
+          <span>Programados<b>${41 + S.extra}</b></span>
+          <span>Visitados<b>${v}</b></span>
+          <span>Por visitar<b>${41 + S.extra - v}</b></span>
+        </div>
+        <div class="bd">
+          ${S.altas.map(a => `<div class="row" style="opacity:.6">
+            <div class="mk">⏳</div>
+            <span style="flex:1">${a.n}</span>
+            <small>EN TRÁMITE</small>
+          </div>`).join('')}
+          ${S.C.map((c, i) => `<div class="row" data-a="cli" data-v="${i}">
+            <div class="mk ${c.st === 1 ? 'o' : c.st === 2 ? 'k' : ''}">${c.st === -1 ? '✕' : c.st === 1 ? '⏳' : c.st === 2 ? '✓' : ''}</div>
+            <span style="flex:1">${c.n}</span>${c.nuevo ? '<small style="color:#4c4">NUEVO</small>' : ''}${GPS}
+          </div>`).join('')}
+          <div style="color:#777;text-align:center;font-size:11px;padding:6px">Demo: 12 de 41 clientes</div>
+        </div>
+        <div class="ft">
+          <span data-a="home" style="font-size:24px;line-height:20px">←</span>
+          <span data-a="na" data-v="Pedidos pendientes de enviar: ${S.C.filter(c => c.st === 1).length}">🛒</span>
+          <span>🖥️</span>
+          <span>🔍</span>
+          <span data-a="na" data-v="Cambiar vista de clientes.">${WIN}</span>
+          <span>⇅</span>
+          <span data-a="na" data-v="Ubicación GPS del equipo.">${GPS}</span>
+          <span data-a="alta" style="font-size:24px;line-height:20px">＋</span>
+        </div>`;
+    },
+
+    // ── Vista: motivo "No Código de Barras" ───────────────────────────
+    motivo: () => hd('No Código de Barras', S.C[S.cur].n) + `
+      <div class="bd">
+        <div style="font-size:22px;color:#bbb;padding:8px 6px">Motivo:</div>
+        ${['Código sin sticker', 'No deja colocar sticker', 'Sticker dañado', 'Pedido fuera del PDV', 'Falla del sticker', 'Zona peligrosa'].map(m => `
+        <div class="rad ${S.mot === m ? 'on' : ''}" data-a="mot" data-v="${m}">
+          <u></u>${m}
+        </div>`).join('')}
+      </div>
+      <div class="big" data-a="savemot">💾</div>`,
+
+    // ── Vista: ventana del cliente — mosaicos ─────────────────────────
+    panel: () => {
+      const c = S.C[S.cur],
+            na = m => `data-a="na" data-v="${m}"`;
+      return hd(c.n, c.t) + `
+        <div class="bd">
+          <div class="gm">
+            <div class="t r">
+              <b>0%</b>Cuota y Venta Acumulada
+            </div>
+            <div class="t">
+              <b style="font-size:13px">ICE</b>
+            </div>
+            <div class="t w2 h2 g">
+              <b style="font-size:30px">0c 0d</b>Órdenes de Trabajo
+            </div>
+            <div class="t r">
+              <b>0%</b>Participación
+            </div>
+            <div class="t g">
+              <b>0.0M</b>Crédito
+            </div>
+            <div class="t" data-a="trans">
+              <em>⛨</em>Transacciones
+            </div>
+            <div class="t">
+              <b>0</b>Mensajes
+            </div>
+            <div class="t" ${na('Información del cliente.')}>
+              <em>👤</em>Información del Cliente
+            </div>
+            <div class="t" data-a="promo">
+              <em>🎁</em>Promociones
+            </div>
+            <div class="t g">
+              <b>0</b>Imperdibles
+            </div>
+            <div class="t">
+              <em>📋</em>Cobertura de Iniciativas
+            </div>
+            <div class="t r">
+              <b>0%</b>Rendimiento
+            </div>
+            <div class="t g" data-a="dig">
+              <em>🛒</em>Pedidos Digitales
+            </div>
+            <div class="t" ${na('Histórico de compras.')}>
+              <em>📊</em>Histórico de Compras
+            </div>
+            <div class="t" data-a="nocode">
+              <em>🏷️</em>No Código de Barras
+            </div>
+          </div>
+        </div>`;
+    },
+
+    // ── Vista: transacciones del cliente ──────────────────────────────
+    trans: () => hd('Transacciones', S.C[S.cur].n) + `
+      <div class="bd">
+        <div class="g2">
+          <div class="t" data-a="ped">
+            <em>👜</em>Pedidos
+          </div>
+          <div class="t r" data-a="nop" data-v="No pedido registrado">
+            <em>🚫</em>No Pedido
+          </div>
+          <div class="t r" data-a="na" data-v="Encuestas.">
+            <em>☑</em>Encuestas
+          </div>
+          <div class="t" data-a="nop" data-v="No visita registrada">
+            <em>👜</em>No Visita
+          </div>
+          <div class="t r" data-a="na" data-v="Órdenes de trabajo.">
+            <b>0c 0d</b>Órdenes de Trabajo
+          </div>
+          <div class="t" data-a="cambio">
+            <em>🔄</em>Cambio Producto
+          </div>
+          <div class="t r">
+            <b>0</b>Oportunidades
+          </div>
+          <div class="t" data-a="na" data-v="Transacciones activas.">
+            <em>✔</em>Transacciones Activas
+          </div>
+        </div>
+      </div>`,
+
+    // ── Vista: pedido — pág. 0 saldos · pág. 1 levantamiento ──────────
+    ped: () => {
+      const c = S.C[S.cur],
+            tb = `<div class="tb"><span>◈</span><span data-a="promo">🎁</span><span>🔍</span><span data-a="ok">✓</span></div>`,
+            dt = `<div class="dots">${[0, 1].map(i => `<span class="${S.pg === i ? 'on' : ''}" data-a="pg" data-v="${i}"></span>`).join('')}</div>`;
+
+      // Página 0: saldos del cliente
+      if (S.pg === 0) return hd('Levantamiento de Pedido', '1557547-' + c.n) + `
+        <div class="bd">
+          <div style="color:#aab;padding:8px 4px">Saldos</div>
+          <div class="fld">
+            <span>Saldo anterior</span>
+            <span>$0.00</span>
+          </div>
+          <div class="fld">
+            <span>Saldo actual</span>
+            <span>$0.00</span>
+          </div>
+          <div class="fld">
+            <span>Límite de crédito</span>
+            <span>$0.00</span>
+          </div>
+          <div style="color:#aab;padding:16px 4px 4px">Reglas y oportunidades</div>
+          <div style="color:#aab;padding:50px 4px 4px">Cuota</div>
+          <div class="fld">
+            <span>Cuota del día (CF)</span>
+            <span>$0.00</span>
+          </div>
+        </div>${dt}`;
+
+      // Página 1: levantamiento del pedido (tabla de productos)
+      const f = new Date(Date.now() + 864e5).toLocaleDateString('es-PE');
+      return hd('Levantamiento de Pedido', '1557547-' + c.n) + tb + `
+        <div class="bd">
+          <div class="fld">
+            <span>Pedido</span>
+            <span>F.Entrega: ${f}</span>
+          </div>
+          <div style="color:#aab;font-size:11px;padding:0 6px 4px">Ult. Compras: $6.42 / $82.70 / $59.95</div>
+          <table class="lv">
+            <tr>
+              <th style="width:15%">SKU</th>
+              <th>Descripción</th>
+              <th style="width:14%">Precio</th>
+              <th style="width:12%">Caj.</th>
+              <th style="width:12%">Bot.</th>
+              <th style="width:16%">Importe</th>
+              <th style="width:6%"></th>
+            </tr>
+            ${S.rows.map((r, i) => { const p = CAT[r.k]; return `<tr>
+              <td><input id="k${i}" value="${r.k}" inputmode="numeric" oninput="rin(${i})"></td>
+              <td id="d${i}">${p ? p[0] : (r.k ? '<span style="color:#f66">No existe</span>' : '')}</td>
+              <td id="p${i}">${p ? fm(p[1]) : ''}</td>
+              <td><input id="c${i}" value="${r.c}" inputmode="numeric" oninput="rin(${i})"></td>
+              <td><input id="b${i}" value="${r.b}" inputmode="numeric" oninput="rin(${i})"></td>
+              <td id="m${i}">${p ? fm(rowImp(r)) : ''}</td>
+              <td class="x" data-a="del" data-v="${i}">✕</td>
+            </tr>`; }).join('')}
+          </table>
+          <div class="big" style="font-size:14px;padding:6px" data-a="add">＋ Agregar producto</div>
+          ${tbx(totR())}
+        </div>${dt}`;
+    },
+
+    // ── Vista: resumen del pedido ─────────────────────────────────────
+    resumen: () => {
+      const L = S.rows.filter(r => r.k || r.c || r.b);
+      return hd('Resumen del Pedido', '1557547-' + S.C[S.cur].n) + `
+        <div class="bd">
+          <table class="lv">
+            <tr>
+              <th style="width:15%">SKU</th>
+              <th>Descripción</th>
+              <th style="width:12%">Caj.</th>
+              <th style="width:12%">Bot.</th>
+              <th style="width:20%">Importe</th>
+            </tr>
+            ${L.map(r => `<tr>
+              <td style="text-align:center">${r.k}</td>
+              <td>${CAT[r.k][0]}</td>
+              <td style="text-align:center">${+r.c || 0}</td>
+              <td style="text-align:center">${+r.b || 0}</td>
+              <td>${fm(rowImp(r))}</td>
+            </tr>`).join('')}
+          </table>
+          ${tbx(totR())}
+        </div>
+        <div style="display:flex;gap:6px;margin:0 4px 4px">
+          <div class="big" style="flex:1;margin:2px;font-size:15px" data-a="back">VOLVER</div>
+          <div class="big" style="flex:1;margin:2px;font-size:15px;background:#3cba3c" data-a="confirm">CONFIRMAR</div>
+        </div>`;
+    },
+
+    // ── Vista: alta de cliente nuevo ──────────────────────────────────
+    alta: () => {
+      const a = S.alta,
+            f = (i, t) => `<div class="fld">
+              <span>${t}</span>
+              ${a.f[i] ? `<span style="color:#4c4">✓ ${a.f[i].slice(0, 12)}</span>` : ''}
+              <label class="att">📎 Adjuntar<input type="file" accept="image/*,.pdf" hidden onchange="att(${i},this)"></label>
+            </div>`;
+      return hd('Alta de Cliente', 'Nuevo cliente') + `
+        <div class="bd">
+          <div class="fa">
+            <span>DNI del cliente</span>
+            <input value="${a.dni || ''}" maxlength="8" inputmode="numeric" oninput="alt('dni',this.value)">
+          </div>
+          <div class="fa">
+            <span>Nombres y apellidos</span>
+            <input value="${a.n || ''}" oninput="alt('n',this.value)">
+          </div>
+          <div class="fa">
+            <span>Dirección de la tienda o bodega</span>
+            <input value="${a.d || ''}" oninput="alt('d',this.value)">
+          </div>
+          <div style="color:#aab;padding:8px 6px 2px">Documentos adjuntos</div>
+          ${f(0, 'Recibo de luz o agua')}
+          ${f(1, 'Foto o copia de DNI')}
+          ${f(2, 'Foto de la fachada')}
+        </div>
+        <div class="big" data-a="savealta">💾 Guardar</div>`;
+    },
+
+    // ── Vista: Prioridades ICE — orden de ejecución en la bodega (solo informativa) ──
+    ice: () => hd('Prioridades ICE', 'Orden de ejecución en la bodega') + `
+      <div class="bd">
+        <div class="sec">Afiches</div>
+        <p class="tx">2 afiches en cada muro, uno frente al otro, dentro de la bodega.</p>
+        <div class="sec">Refrigeradora (frío)</div>
+        <p class="tx">Debe estar a la entrada, a un máximo de 1 a 2 metros, a la izquierda o a la derecha.</p>
+        <div class="sec">Orden de las gaseosas en el frío</div>
+        <div class="fr">
+          <div class="shelf"><b>Coca-Cola</b><b>Inca Kola</b></div>
+          <div class="shelf"><b>Agua San Luis</b></div>
+          <div class="shelf"><b>Frugos</b><b>Energizantes</b></div>
+        </div>
+        <p class="tx">Arriba: Coca-Cola a la izquierda e Inca Kola a la derecha, al mismo nivel. En el medio, todas las aguas San Luis. Abajo, los Frugos y los energizantes.</p>
+      </div>`,
+
+    // ── Vista: Saldos — clientes con crédito hasta fin de mes y su total ──
+    saldos: () => {
+      const L = S.C.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+      return hd('Saldos', 'Clientes con crédito hasta fin de mes') + `
+        <div class="bd">
+          ${kpi('Total de saldos', fm(saldoTotal()))}
+          <p class="tx">Estos clientes no pagan el día del reparto: cancelan todo junto a fin de mes.</p>
+          <table class="mini"><tr><th>Cliente</th><th>Saldo</th></tr>
+            ${L.map(c => `<tr><td>${c.n}<small>${c.dir}</small></td><td>${fm(c.saldo)}</td></tr>`).join('')}
+          </table>
+        </div>`;
+    },
+
+    // ── Vista: Resumen del día — bodegas visitadas y litros por marca ──
+    resdia: () => {
+      const list = conPedido(), M = marcasDe(list), tot = litrosHoy(),
+            nPed = S.C.filter(c => c.st >= 1).length, nNo = S.C.filter(c => c.st === -1).length;
+      return hd('Resumen del día', 'Bodegas y litros de hoy') + `
+        <div class="bd">
+          ${kpi('Bodegas visitadas', visitadas() + ' de ' + programadas(), scoreDia())}
+          ${kpi('Por visitar', programadas() - visitadas())}
+          ${kpi('Con pedido / sin pedido', nPed + ' / ' + nNo)}
+          ${kpi('Litros recabados hoy', lt(tot))}
+          <div class="sec">Litros por marca</div>
+          ${MARCAS.map(m => kpi(m, lt(M[m] || 0), pct(M[m] || 0, tot))).join('')}
+        </div>`;
+    },
+
+    // ── Vista: Resumen mensual — bodegas y litros acumulados del mes ──
+    resmes: () => {
+      const M = marcasDe(conPedido()), tot = litrosMes(),
+            mes = new Date().toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+      return hd('Resumen mensual', mes) + `
+        <div class="bd">
+          ${kpi('Bodegas atendidas', atendidasMes() + ' de ' + CFG.visitasMes, cumplMes())}
+          ${kpi('Litros acumulados', lt(tot) + ' de ' + lt(CFG.cuotaMes), cuotaPct())}
+          <div class="sec">Litros del mes por marca</div>
+          ${MARCAS.map(m => { const v = CFG.litrosPrevios * CFG.marcasPrevias[m] + (M[m] || 0); return kpi(m, lt(v), pct(v, tot)); }).join('')}
+          <p class="tx">Incluye los días anteriores del mes (demostración) y lo vendido hoy.</p>
+        </div>`;
+    },
+
+    // ── Vista: Cumplimiento — detalle del avance contra la meta global del mes ──
+    cump: () => hd('Cumplimiento mensual', 'Avance contra la meta global') + `
+      <div class="bd">
+        ${kpi('Clientes atendidos en el mes', atendidasMes() + ' de ' + CFG.visitasMes, cumplMes())}
+        ${kpi('Litros contra la cuota', cuotaPct() + ' %', cuotaPct())}
+        ${kpi('Bodegas atendidas hoy', visitadas() + ' de ' + programadas(), scoreDia())}
+        ${kpi('Efectividad de hoy (con pedido ÷ visitadas)', pct(S.C.filter(c => c.st >= 1).length, visitadas()) + ' %', pct(S.C.filter(c => c.st >= 1).length, visitadas()))}
+        <p class="tx">Meta: 41 bodegas por día, de lunes a sábado, 24 días: 984 visitas al mes.</p>
+      </div>`,
+
+    // ── Vista: Inventario de equipo frío — refrigeradoras prestadas a clientes ──
+    frio: () => {
+      const L = S.C.filter(c => c.frio);
+      return hd('Inventario de equipo frío', L.length + ' equipos prestados') + `
+        <div class="bd">
+          <p class="tx">Refrigeradoras entregadas a clientes de alta compra.</p>
+          <table class="mini"><tr><th>Cliente y dirección</th><th>Código</th></tr>
+            ${L.map(c => `<tr><td>${c.n}<small>${c.dir}</small></td><td>${c.frio}</td></tr>`).join('')}
+          </table>
+        </div>`;
+    },
+
+    // ── Vista: promociones vigentes de la ruta ────────────────────────
+    promos: () => hd('Promociones', 'Ruta 104 · vigentes') + `
+      <div class="bd">
+        ${PL.map(p => `<div style="background:#1b1d22;border-radius:6px;padding:10px;margin:6px 2px">
+          <b style="color:#fff">${p[0]}</b>
+          <div style="color:#bbb;font-size:12px;margin-top:4px">${p[1]}</div>
+        </div>`).join('')}
+        <div style="color:#777;font-size:11px;padding:6px 4px">Promociones de demostración.</div>
+      </div>`,
+
+    // ── Vista: cambio de producto — merma · vencido · defectuoso ──────
+    cambio: () => {
+      const c = S.C[S.cur];
+      return hd('Cambio de Producto', '1557547-' + c.n) + `
+        <div class="tb">
+          <span>◈</span>
+          <span></span>
+          <span></span>
+          <span data-a="cok">✓</span>
+        </div>
+        <div class="bd">
+          <div style="color:#aab;font-size:11px;padding:2px 6px 4px">Producto a cambiar: merma, vencido o defectuoso</div>
+          <table class="lv">
+            <tr>
+              <th style="width:15%">SKU</th>
+              <th>Descripción</th>
+              <th style="width:11%">Caj.</th>
+              <th style="width:11%">Bot.</th>
+              <th style="width:26%">Motivo</th>
+              <th style="width:6%"></th>
+            </tr>
+            ${S.cr.map((r, i) => { const p = CAT[r.k]; return `<tr>
+              <td><input id="ck${i}" value="${r.k}" inputmode="numeric" oninput="crin(${i})"></td>
+              <td id="cd${i}">${p ? p[0] : (r.k ? '<span style="color:#f66">No existe</span>' : '')}</td>
+              <td><input id="cc${i}" value="${r.c}" inputmode="numeric" oninput="crin(${i})"></td>
+              <td><input id="cb${i}" value="${r.b}" inputmode="numeric" oninput="crin(${i})"></td>
+              <td><select id="cm${i}" onchange="crin(${i})">${['Merma', 'Vencido', 'Defectuoso'].map(m => `<option${r.m === m ? ' selected' : ''}>${m}</option>`).join('')}</select></td>
+              <td class="x" data-a="cdel" data-v="${i}">✕</td>
+            </tr>`; }).join('')}
+          </table>
+          <div class="big" style="font-size:14px;padding:6px" data-a="cadd">＋ Agregar producto</div>
+          ${ctot(S.cr)}
+        </div>`;
+    },
+
+    // ── Vista: resumen del cambio de producto ─────────────────────────
+    cresumen: () => {
+      const L = S.cr.filter(r => r.k || r.c || r.b);
+      return hd('Resumen del Cambio', '1557547-' + S.C[S.cur].n) + `
+        <div class="bd">
+          <table class="lv">
+            <tr>
+              <th style="width:15%">SKU</th>
+              <th>Descripción</th>
+              <th style="width:12%">Caj.</th>
+              <th style="width:12%">Bot.</th>
+              <th style="width:24%">Motivo</th>
+            </tr>
+            ${L.map(r => `<tr>
+              <td style="text-align:center">${r.k}</td>
+              <td>${CAT[r.k][0]}</td>
+              <td style="text-align:center">${+r.c || 0}</td>
+              <td style="text-align:center">${+r.b || 0}</td>
+              <td>${r.m}</td>
+            </tr>`).join('')}
+          </table>
+          ${ctot(L)}
+        </div>
+        <div style="display:flex;gap:6px;margin:0 4px 4px">
+          <div class="big" style="flex:1;margin:2px;font-size:15px" data-a="back">VOLVER</div>
+          <div class="big" style="flex:1;margin:2px;font-size:15px;background:#3cba3c" data-a="cconfirm">CONFIRMAR</div>
+        </div>`;
+    }
+  };
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 8: DIÁLOGOS, RENDER Y NAVEGACIÓN
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // HTML del diálogo modal abierto (promociones o confirmación genérica)
+  function dlg() {
+    const d = S.dlg;
+    if (!d) return '';
+
+    // Diálogo de promociones: lista + detalle de la seleccionada
+    if (d.k === 'promo') return `
+      <div class="ov">
+        <div class="dl">
+          <h4>◈ Promociones</h4>
+          ${PR.map((p, i) => `<div class="it ${S.psel === i ? 'on' : ''}" data-a="psel" data-v="${i}">${p[0]}</div>`).join('')}
+          <hr>
+          <b>Detalle:</b>
+          <div style="font-size:12px;margin-top:4px">${PR[S.psel][1]}</div>
+          <div class="bt">
+            <span data-a="close">CERRAR</span>
+          </div>
+        </div>
+      </div>`;
+
+    // Diálogo genérico: título, cuerpo y botones [texto, acción]
+    return `
+      <div class="ov">
+        <div class="dl">
+          <h4>${d.t}</h4>
+          ${d.b}
+          <div class="bt">
+            ${(d.btn || []).map(b => `<span data-a="${b[1]}">${b[0]}</span>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Clave de la guía según la pantalla (y el diálogo) visibles
+  function key() {
+    const d = S.dlg;
+    if (d) return d.k === 'promo' ? 'promo' : d.k === 'scan' ? 'scan' : 'conf';
+    if (S.scr === 'ped') return S.pg ? 'lev' : 'ped0';
+    return S.scr;
+  }
+
+  // Pinta la pantalla del equipo (#scr) y la guía de práctica (#gd)
+  function render() {
+    $('#scr').innerHTML = `
+      <div class="sb">
+        <span>${tm()}</span>
+        <span>${S.off ? '🔑 📍 ✕ Sin señal 🔋' : '🔑 📍 4G ▂▄▆ 🔋'}</span>
+      </div>
+      ${V[S.scr]()}
+      ${dlg()}
+      ${S.toast ? `<div class="toast">${S.toast}</div>` : ''}`;
+
+    // Guía: título y explicación del paso, flujo con pasos hechos/actual
+    const g = G[key()],
+          cur = g[2];
+    $('#gd').innerHTML = `
+      <h3>${g[0]}</h3>
+      <p>${g[1]}</p>
+      <ol>
+        ${FLOW.map((f, i) => `<li class="${i === cur ? 'on' : i < cur ? 'd' : ''}"><b>${i < cur ? '✓' : i + 1}</b>${f}</li>`).join('')}
+      </ol>
+      ${S.lastT ? `<p class="tip">⏱️ Último pedido: ${S.lastT.toFixed(0)} s (meta del PA1: ≤ 90 s) ${S.lastT <= 90 ? '✓' : '✗'}</p>` : ''}
+      <button class="rs" data-a="qa">Ejecutar pruebas de calidad</button>
+      <button class="rs" data-a="off">${S.off ? 'Recuperar internet' : 'Simular zona sin cobertura'}</button>
+      <button class="rs" data-a="reset">Reiniciar práctica</button>`;
+  }
+
+  // Navega a una pantalla guardando el historial (botón atrás)
+  function go(s) {
+    S.h.push(S.scr);
+    S.scr = s;
+    render();
+  }
+
+  // Muestra un mensaje flotante 2.6 s y repinta
+  function toast(m) {
+    S.toast = m;
+    render();
+    clearTimeout(S.tt);
+    S.tt = setTimeout(() => { S.toast = null; render(); }, 2600);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 9: CÁLCULOS DEL PEDIDO Y EDICIÓN DE TABLAS
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Recuadro de totales del cambio de producto: cajas y botellas
+  const ctot = L => {
+    let c = 0, b = 0;
+    L.forEach(r => {
+      if (CAT[r.k]) {
+        c += +r.c || 0;
+        b += +r.b || 0;
+      }
+    });
+    return `<div class="tot">
+      <div><span>Cajas:</span><b id="xc">${c}</b></div>
+      <div><span>Botellas:</span><b id="xb">${b}</b></div>
+    </div>`;
+  };
+
+  // Edición de una fila del cambio de producto (SKU, cajas, botellas, motivo)
+  function crin(i) {
+    ['k', 'c', 'b'].forEach(x => {
+      const e = $('#c' + x + i);
+      e.value = e.value.replace(/\D/g, '');
+    });
+    const r = S.cr[i];
+    r.k = $('#ck' + i).value;
+    r.c = $('#cc' + i).value;
+    r.b = $('#cb' + i).value;
+    r.m = $('#cm' + i).value;
+
+    // Descripción automática según el SKU
+    const p = CAT[r.k];
+    $('#cd' + i).innerHTML = p ? p[0] : (r.k ? '<span style="color:#f66">No existe</span>' : '');
+
+    // Recalcula los totales del cambio
+    let c = 0, b = 0;
+    S.cr.forEach(x => {
+      if (CAT[x.k]) {
+        c += +x.c || 0;
+        b += +x.b || 0;
+      }
+    });
+    $('#xc').textContent = c;
+    $('#xb').textContent = b;
+  }
+
+  // Importe de una fila: cajas × precio + botellas × precio unitario
+  const rowImp = r => { const p = CAT[r.k]; return p ? (+r.c || 0) * p[1] + (+r.b || 0) * p[1] / p[2] : 0 };
+
+  // Totales del pedido: con promoción (12 % si más de 2 cajas) e IGV 18 %
+  const totR = R => {
+    R = R || S.rows;
+    let c = 0, b = 0, s = 0;
+    R.forEach(r => {
+      if (CAT[r.k]) {
+        c += +r.c || 0;
+        b += +r.b || 0;
+        s += rowImp(r);
+      }
+    });
+    const pr = c > 2 ? s * .12 : 0,
+          ba = s - pr,
+          ig = ba * .18;
+    return { c, b, s, pr, ig, t: ba + ig };
+  };
+
+  // Recuadro de totales del pedido (subtotal, promoción, IGV y total)
+  const tbx = T => `<div class="tot">
+    <div><span>Cajas:</span><b id="tc">${T.c}</b></div>
+    <div><span>Subtotal:</span><b id="ts">${fm(T.s)}</b></div>
+    <div><span>Botellas:</span><b id="tb2">${T.b}</b></div>
+    <div><span>Promoción:</span><b id="tp">-${fm(T.pr)}</b></div>
+    <div></div>
+    <div><span>IGV 18%:</span><b id="ti">${fm(T.ig)}</b></div>
+    <div></div>
+    <div><b>TOTAL:</b><b id="tt2" style="font-size:14px">${fm(T.t)}</b></div>
+  </div>`;
+
+  // Edición de una fila del pedido (SKU, cajas, botellas)
+  function rin(i) {
+    ['k', 'c', 'b'].forEach(x => {
+      const e = $('#' + x + i);
+      e.value = e.value.replace(/\D/g, '');
+    });
+    const r = S.rows[i];
+    r.k = $('#k' + i).value;
+    r.c = $('#c' + i).value;
+    r.b = $('#b' + i).value;
+
+    // Descripción, precio e importe automáticos
+    const p = CAT[r.k];
+    $('#d' + i).innerHTML = p ? p[0] : (r.k ? '<span style="color:#f66">No existe</span>' : '');
+    $('#p' + i).textContent = p ? fm(p[1]) : '';
+    $('#m' + i).textContent = p ? fm(rowImp(r)) : '';
+
+    // Recalcula los totales del pedido
+    const T = totR();
+    $('#tc').textContent = T.c;
+    $('#tb2').textContent = T.b;
+    $('#ts').textContent = fm(T.s);
+    $('#tp').textContent = '-' + fm(T.pr);
+    $('#ti').textContent = fm(T.ig);
+    $('#tt2').textContent = fm(T.t);
+  }
+
+  // Guarda un campo del formulario de alta de cliente
+  function alt(k, v) { S.alta[k] = v }
+
+  // Guarda el nombre del documento adjuntado y repinta
+  function att(i, el) {
+    S.alta.f[i] = el.files[0] ? el.files[0].name : '';
+    render();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 9B: CUOTA, METAS Y RESÚMENES (litros, bodegas y saldos)
+     Funciones de cálculo que alimentan el menú y las pantallas de resumen.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Porcentaje entero de a sobre b (0 si b es 0)
+  const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
+
+  // Formato de litros: 22140 → "22,140 L"
+  const lt = n => Math.round(n).toLocaleString('en-US') + ' L';
+
+  // Litros de una lista de filas [{k, c, b}]: (cajas × botellas por caja + botellas) × ml ÷ 1000
+  const litrosDe = rows => rows.reduce((a, r) => {
+    const p = CAT[r.k];
+    return p ? a + ((+r.c || 0) * p[2] + (+r.b || 0)) * p[3] / 1000 : a;
+  }, 0);
+
+  // Litros por marca de una lista de clientes: { 'Coca-Cola': 27, ... }
+  const marcasDe = list => {
+    const o = {};
+    list.forEach(c => c.ord.rows.forEach(r => {
+      const p = CAT[r.k];
+      if (p) o[p[4]] = (o[p[4]] || 0) + ((+r.c || 0) * p[2] + (+r.b || 0)) * p[3] / 1000;
+    }));
+    return o;
+  };
+
+  // Clientes con pedido hoy (enviado o pendiente de enviar)
+  const conPedido = () => S.C.filter(c => c.ord && c.st >= 1);
+
+  // Litros vendidos hoy
+  const litrosHoy = () => conPedido().reduce((a, c) => a + litrosDe(c.ord.rows), 0);
+
+  // Litros del mes = días anteriores (demo) + hoy
+  const litrosMes = () => CFG.litrosPrevios + litrosHoy();
+
+  // Porcentaje de la cuota mensual alcanzado
+  const cuotaPct = () => pct(litrosMes(), CFG.cuotaMes);
+
+  // Bodegas atendidas hoy (con pedido o sin pedido) y bodegas programadas
+  const visitadas = () => S.C.filter(c => c.st !== 0).length;
+  const programadas = () => CFG.visitasDia + S.extra;
+
+  // Score diario: bodegas atendidas hoy ÷ programadas (solo bodegas, no litros)
+  const scoreDia = () => pct(visitadas(), programadas());
+
+  // Cumplimiento mensual: bodegas atendidas en el mes ÷ 984 visitas del mes
+  const atendidasMes = () => CFG.visitasPrevias + visitadas();
+  const cumplMes = () => pct(atendidasMes(), CFG.visitasMes);
+
+  // Suma de los saldos (créditos) de todos los clientes
+  const saldoTotal = () => S.C.reduce((a, c) => a + (c.saldo || 0), 0);
+
+  // Barra de progreso para las pantallas de resumen
+  const bar = p => `<div class="bar"><i style="width:${Math.min(100, p)}%"></i></div>`;
+
+  // Fila de indicador con su barra
+  const kpi = (et, val, p) => `<div class="kpi"><span>${et}</span><b>${val}</b></div>${p === undefined ? '' : bar(p)}`;
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 10: PANEL POST-ENVIAR: CDA → SAP → ORDEN DE REPARTO
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Muestra el panel "Qué pasa después de Enviar".
+  // nw = nombres de clientes con pedido en esta transmisión
+  // cam = cambios de producto enviados · al = altas de cliente enviadas
+  function showCda(nw, cam, al) {
+    const el = $('#cda');
+    el.style.display = 'block';
+
+    // Cancela animaciones de un envío anterior
+    cdaT.forEach(clearTimeout);
+    cdaT = [];
+
+    // Asigna factura a cada cliente con pedido sin número (demo)
+    let f0 = S.fac || 97;
+    S.C.forEach(c => {
+      if (c.ord && !c.fac) c.fac = 'F001-' + String(++f0).padStart(6, '0');
+    });
+    S.fac = f0;
+
+    // O = clientes que van en la factura y el reparto (visitados con pedido)
+    // N = clientes de esta transmisión · prod = carga total por producto
+    const hh = tm(),
+          O = S.C.filter(c => c.ord && c.st === 2),
+          N = S.C.filter(c => nw.includes(c.n)),
+          prod = {};
+    O.forEach(c => c.ord.rows.forEach(r => {
+      const p = prod[r.k] = prod[r.k] || { c: 0, b: 0 };
+      p.c += +r.c || 0;
+      p.b += +r.b || 0;
+    }));
+    const tc = Object.values(prod).reduce((a, p) => a + p.c, 0),
+          tb = Object.values(prod).reduce((a, p) => a + p.b, 0);
+
+    // Detalle de productos de un cliente, una línea por SKU
+    const det = c => c.ord.rows.map(r => CAT[r.k][0] + ' × ' + r.c + (r.b ? ' + ' + r.b + ' bot.' : '')).join('<br>');
+
+    const NODES = ['📱 Equipo del vendedor', '🔀 Middleware API', '🏭 CDA (Centro de Distribución)', '🧾 SAP SD/MM + SUNAT', '🚚 Logística SAP LES/WM'],
+          MSG = ['Transmitiendo datos…', 'Validando token y datos…', 'Llegaron al CDA a las ' + hh, 'SAP: pedidos registrados y facturas generadas', 'Orden de reparto lista para mañana'];
+
+    el.innerHTML = `
+      <h3>Qué pasa después de Enviar</h3>
+      <div class="pipe">
+        ${NODES.map((n, i) => `<div class="nd" id="nd${i}">${n}</div>${i < 4 ? '<span class="ar">➜</span>' : ''}`).join('')}
+      </div>
+      <span class="st" id="cdaMsg">Transmitiendo datos…</span>
+      <div id="cdaBody" style="opacity:0;transition:opacity .6s">
+
+        <h4>1. Pedidos que llegaron al CDA</h4>
+        ${N.length ? `<table>
+          <tr>
+            <th>Cliente</th>
+            <th>Productos</th>
+            <th>Total</th>
+          </tr>
+          ${N.map(c => `<tr>
+            <td>${c.n}</td>
+            <td>${det(c)}</td>
+            <td>${fm(totR(c.ord.rows).t)}</td>
+          </tr>`).join('')}
+        </table>` : '<p class="note">Esta transmisión no incluía pedidos nuevos.</p>'}
+
+        ${cam.length ? `<h4>Cambios de producto recibidos</h4>
+        <table>
+          <tr>
+            <th>Cliente</th>
+            <th>Producto</th>
+            <th>Cajas</th>
+            <th>Bot.</th>
+            <th>Motivo</th>
+          </tr>
+          ${cam.map(x => x.rows.map(r => `<tr>
+            <td>${x.n}</td>
+            <td>${CAT[r.k][0]}</td>
+            <td>${+r.c || 0}</td>
+            <td>${+r.b || 0}</td>
+            <td>${r.m}</td>
+          </tr>`).join('')).join('')}
+        </table>` : ''}
+
+        ${al.length ? `<h4>Altas de cliente enviadas al CDA y de ahí al SAP</h4>
+        <p class="note">${al.join(', ')}: ya aparece como cliente nuevo en la lista.</p>` : ''}
+
+        <h4>2. SAP genera las facturas (demo)</h4>
+        <table>
+          <tr>
+            <th>N° comprobante</th>
+            <th>Cliente</th>
+            <th>Subtotal</th>
+            <th>Promoción</th>
+            <th>IGV 18 %</th>
+            <th>Total</th>
+            <th>Estado</th>
+          </tr>
+          ${O.map(c => { const T = totR(c.ord.rows); return `<tr>
+            <td>${c.fac}</td>
+            <td>${c.n}</td>
+            <td>${fm(T.s)}</td>
+            <td>-${fm(T.pr)}</td>
+            <td>${fm(T.ig)}</td>
+            <td><b>${fm(T.t)}</b></td>
+            <td>Emitida a SUNAT</td>
+          </tr>`; }).join('')}
+        </table>
+
+        <h4>3. Orden de reparto para Logística (entrega de mañana)</h4>
+        <p class="note">Ruta 104 · camión 1. Las paradas siguen el orden de la ruta.</p>
+        <table>
+          <tr>
+            <th>Parada</th>
+            <th>Cliente</th>
+            <th>Dirección</th>
+            <th>Productos</th>
+            <th>Cajas</th>
+            <th>Bot.</th>
+          </tr>
+          ${O.map((c, i) => { const T = totR(c.ord.rows); return `<tr>
+            <td>${i + 1}</td>
+            <td>${c.n}</td>
+            <td>${c.dir}</td>
+            <td>${det(c)}</td>
+            <td>${T.c}</td>
+            <td>${T.b}</td>
+          </tr>`; }).join('')}
+        </table>
+
+        <h4>4. Total a cargar y armado de pallets</h4>
+        <table>
+          <tr>
+            <th>Producto</th>
+            <th>Cajas</th>
+            <th>Botellas</th>
+          </tr>
+          ${Object.keys(prod).map(k => `<tr>
+            <td>${CAT[k][0]}</td>
+            <td>${prod[k].c}</td>
+            <td>${prod[k].b}</td>
+          </tr>`).join('')}
+          <tr>
+            <td><b>TOTAL</b></td>
+            <td><b>${tc}</b></td>
+            <td><b>${tb}</b></td>
+          </tr>
+        </table>
+        <p class="note">Pallets estimados: <b>${(tc / 48).toFixed(1)}</b> (supuesto de demostración: 48 cajas por pallet).</p>
+      </div>`;
+
+    // Anima los 5 nodos de la tubería, uno cada 0.7 s
+    NODES.forEach((n, i) => cdaT.push(setTimeout(() => {
+      const d = $('#nd' + i);
+      if (!d) return;
+      d.classList.add('on');
+      $('#cdaMsg').textContent = MSG[i];
+      if (i === 4) $('#cdaBody').style.opacity = 1;
+    }, 700 * i + 200)));
+
+    el.scrollIntoView && el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 11: SUITE DE PRUEBAS DE CALIDAD (27 CASOS)
+     Cada prueba usa el simulador real y luego restaura la práctica.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  function runQA() {
+    // Guarda el estado de la práctica y del catálogo para restaurarlos al final
+    const snap = JSON.stringify(S),
+          ca = JSON.stringify(CAT),
+          R = [],
+          eq = (a, b) => Math.abs(a - b) < 0.005;
+
+    // Registra un caso: ejecuta la función y guarda [id, tipo, caso, esperado, obtenido, ¿ok?]
+    const t = (id, tp, nm, ex, fn) => {
+      let g, ok;
+      try {
+        const r = fn();
+        ok = Array.isArray(r) ? r[0] : r === true;
+        g = Array.isArray(r) ? r[1] : (ok ? 'Cumple' : String(r));
+      } catch (e) {
+        ok = false;
+        g = 'Error: ' + e.message;
+      }
+      R.push([id, tp, nm, ex, g, ok]);
+    };
+
+    // Recorre el flujo completo de un pedido para el cliente i con las filas dadas
+    const pedido = (i, rows) => {
+      init();
+      A.login();
+      A.clients();
+      A.cli(i);
+      A.trans();
+      A.ped();
+      S.rows = rows;
+      A.ok();
+      A.confirm();
+    };
+
+    // Pedido de prueba: 3 cajas del SKU 124
+    const R3 = [{ k: '124', c: 3, b: 0 }];
+
+    /* ── Unitarias (U1 a U7): cálculos y validaciones ── */
+    t('U1', 'Unitaria', 'Importe de 3 cajas del SKU 124', '$115.50', () => {
+      const v = rowImp({ k: '124', c: 3, b: 0 });
+      return [eq(v, 115.5), fm(v)];
+    });
+    t('U2', 'Unitaria', 'Importe de 2 botellas del SKU 123 (24 por caja)', '$1.44', () => {
+      const v = rowImp({ k: '123', c: 0, b: 2 });
+      return [eq(v, 1.44), fm(v)];
+    });
+    t('U3', 'Unitaria', 'Sin promoción con 2 cajas; 12 % con 3 cajas', '$0.00 y $13.86', () => {
+      S.rows = [{ k: '124', c: 2, b: 0 }];
+      const a = totR().pr;
+      S.rows = R3;
+      const b = totR().pr;
+      return [eq(a, 0) && eq(b, 13.86), fm(a) + ' y ' + fm(b)];
+    });
+    t('U4', 'Unitaria', 'IGV 18 % y total del pedido de 3 cajas', 'IGV $18.30, total $119.94', () => {
+      S.rows = R3;
+      const T = totR();
+      return [eq(T.ig, 18.2952) && eq(T.t, 119.9352), 'IGV ' + fm(T.ig) + ', total ' + fm(T.t)];
+    });
+    t('U5', 'Unitaria', 'SKU inexistente es rechazado', 'Aviso "no existe"', () => {
+      init();
+      S.rows = [{ k: '999', c: 1, b: 0 }];
+      A.ok();
+      return [/no existe/.test(S.toast), S.toast];
+    });
+    t('U6', 'Unitaria', 'Pedido sin cajas ni botellas es rechazado', 'Aviso de cantidad mínima', () => {
+      init();
+      S.rows = [{ k: '123', c: '', b: '' }];
+      A.ok();
+      return [/cantidad/.test(S.toast), S.toast];
+    });
+    t('U7', 'Unitaria', 'Alta de cliente con DNI de 3 dígitos', 'Rechazada', () => {
+      init();
+      S.alta = { dni: '123', n: 'A', d: 'B', f: ['a', 'b'] };
+      A.savealta();
+      return [/DNI/.test(S.toast) && !S.altas.length, S.toast];
+    });
+
+    /* ── Integración (I1 a I9): recorridos completos de la app ── */
+    // U8: la cuota mensual sale de 18 L × 41 visitas × 30 días
+    t('U8', 'Unitaria', 'Cuota mensual: 18 L × 41 visitas × 30 días', '22 140 L', () => {
+      return [CFG.cuotaMes === 22140, lt(CFG.cuotaMes)];
+    });
+
+    // U9: litros de 3 cajas del SKU 124 (9 botellas de 1 L por caja)
+    t('U9', 'Unitaria', 'Litros de 3 cajas del SKU 124', '27 L', () => {
+      const v = litrosDe([{ k: '124', c: 3, b: 0 }]);
+      return [eq(v, 27), v.toFixed(1) + ' L'];
+    });
+
+    // U10: score diario y cumplimiento mensual al iniciar (6 visitadas de 41)
+    t('U10', 'Unitaria', 'Score diario y cumplimiento mensual iniciales', 'Score 15 %, cumplimiento 32 %', () => {
+      init();
+      return [scoreDia() === 15 && cumplMes() === 32, 'Score ' + scoreDia() + ' %, cumplimiento ' + cumplMes() + ' %'];
+    });
+
+    t('I1', 'Integración', 'Login lleva al menú principal', 'Pantalla menu', () => {
+      init();
+      A.login();
+      return [S.scr === 'menu', S.scr];
+    });
+    t('I2', 'Integración', 'Cliente abre su panel sin ventana intermedia', 'panel y sin diálogo', () => {
+      init();
+      A.login();
+      A.clients();
+      A.cli(6);
+      return [S.scr === 'panel' && !S.dlg, S.scr + (S.dlg ? ' con diálogo' : '')];
+    });
+    t('I3', 'Integración', 'Pedido completo: resumen, confirmar y guardar', 'Cliente pendiente con pedido', () => {
+      pedido(6, R3);
+      return [S.C[6].st === 1 && S.C[6].ord.rows.length === 1 && S.scr === 'menu', 'estado ' + S.C[6].st + ', pantalla ' + S.scr];
+    });
+    t('I4', 'Integración', 'Enviar con internet marca el pedido como enviado', 'Estado 2 y factura', () => {
+      pedido(6, R3);
+      A.send();
+      A.run();
+      const m = S.mode;
+      A.fin();
+      return [m === 'x' && S.C[6].st === 2 && !!S.C[6].fac, 'estado ' + S.C[6].st + ', ' + S.C[6].fac];
+    });
+    t('I5', 'Integración', 'Sin cobertura: Enviar avisa y conserva el pedido', 'Aviso y pedido guardado', () => {
+      pedido(7, R3);
+      S.off = true;
+      A.run();
+      return [S.dlg && S.dlg.t === 'Sin conexión' && S.C[7].st === 1, (S.dlg ? S.dlg.t : 'sin aviso') + ', estado ' + S.C[7].st];
+    });
+    t('I6', 'Integración', 'Contingente con internet envía lo guardado', 'Estado 2', () => {
+      pedido(7, R3);
+      S.off = true;
+      S.off = false;
+      A.runcont();
+      const m = S.mode;
+      A.fin();
+      return [m === 'cont' && S.C[7].st === 2, m + ', estado ' + S.C[7].st];
+    });
+    t('I7', 'Integración', 'Fin de Ruta cierra la ruta y exige sincronizar', 'Ruta cerrada', () => {
+      init();
+      A.login();
+      A.runruta();
+      A.fin();
+      A.clients();
+      return [S.closed && S.dlg && S.dlg.t === 'Ruta cerrada', 'cerrada=' + S.closed];
+    });
+    t('I8', 'Integración', 'Alta de cliente llega como NUEVO tras enviar', 'Cliente NUEVO', () => {
+      init();
+      A.login();
+      A.alta();
+      S.alta = { dni: '12345678', n: 'Ana Perez', d: 'Jr. Real 1', f: ['a.jpg', 'b.jpg'] };
+      A.savealta();
+      A.run();
+      A.fin();
+      return [!!S.C[0].nuevo && S.extra === 1, S.C[0].n + (S.C[0].nuevo ? ' NUEVO' : '')];
+    });
+    t('I9', 'Integración', 'Cambio de producto se guarda para enviar', '1 cambio pendiente', () => {
+      init();
+      A.login();
+      A.clients();
+      A.cli(8);
+      A.trans();
+      A.cambio();
+      S.cr = [{ k: '125', c: 1, b: 0, m: 'Vencido' }];
+      A.cok();
+      const a = S.scr;
+      A.cconfirm();
+      return [a === 'cresumen' && S.cambios.length === 1, a + ', cambios ' + S.cambios.length];
+    });
+
+    /* ── Sistema (S1): flujo extremo a extremo con panel CDA ── */
+    // I10: un pedido confirmado sube los litros y el porcentaje de la cuota
+    t('I10', 'Integración', 'Un pedido de 40 cajas del SKU 124 suma 360 L a la cuota', '+360 L y % mayor', () => {
+      init();
+      const a = litrosMes(), pa = cuotaPct();
+      pedido(8, [{ k: '124', c: 40, b: 0 }]);
+      return [eq(litrosMes() - a, 360) && cuotaPct() > pa, '+' + Math.round(litrosMes() - a) + ' L, ' + pa + ' % → ' + cuotaPct() + ' %'];
+    });
+
+    t('S1', 'Sistema', 'Flujo completo: pedido, envío, CDA, factura y reparto', 'Cliente en factura y reparto', () => {
+      pedido(9, [{ k: '126', c: 5, b: 0 }, { k: '127', c: 1, b: 0 }]);
+      A.send();
+      A.run();
+      A.fin();
+      const x = $('#cda').textContent;
+      return [x.includes(S.C[9].n) && x.includes('F001-'), S.C[9].fac];
+    });
+
+    /* ── Usabilidad (X1, X2) ── */
+    t('X1', 'Usabilidad', 'Tiempo de un pedido (meta PA1: 90 s)', '≤ 90 s', () => {
+      const v = JSON.parse(snap).lastT;
+      return v === undefined ? [true, 'No medido: haz un pedido y vuelve a ejecutar'] : [v <= 90, v.toFixed(1) + ' s'];
+    });
+    t('X2', 'Usabilidad', 'Campos numéricos escribibles, sin flechitas', 'inputmode numeric', () => {
+      init();
+      S.scr = 'ped';
+      S.pg = 1;
+      const h = V.ped();
+      return [h.includes('inputmode="numeric"') && !h.includes('type="number"'), 'ok'];
+    });
+
+    /* ── Mantenibilidad (M1, M2) ── */
+    t('M1', 'Mantenibilidad', 'Catálogo central completo', 'Todos con nombre y precio', () => [
+      Object.values(CAT).every(p => p[0] && p[1] > 0 && p[2] > 0),
+      Object.keys(CAT).length + ' SKU'
+    ]);
+    t('M2', 'Mantenibilidad', 'Cambiar un precio en un solo lugar cambia el total', '$20.00', () => {
+      CAT[123][1] = 20;
+      const v = rowImp({ k: '123', c: 1, b: 0 });
+      Object.assign(CAT, JSON.parse(ca));
+      return [eq(v, 20), fm(v)];
+    });
+
+    /* ── Eficiencia (E1) ── */
+    t('E1', 'Eficiencia', 'Calcular totales de 2000 filas (meta: menos de 1.5 s)', '< 1500 ms', () => {
+      S.rows = Array.from({ length: 2000 }, () => ({ k: '124', c: 2, b: 1 }));
+      const t0 = performance.now();
+      totR();
+      const d = performance.now() - t0;
+      return [d < 1500, d.toFixed(1) + ' ms'];
+    });
+
+    /* ── Portabilidad (P1) ── */
+    t('P1', 'Portabilidad', 'Adaptable a pantallas de celular (meta viewport)', 'Etiqueta viewport', () => [
+      !!document.querySelector('meta[name=viewport]'), 'ok'
+    ]);
+
+    // Resultado global y restauración de la práctica del usuario
+    const okN = R.filter(r => r[5]).length;
+    S = JSON.parse(snap);
+    Object.assign(CAT, JSON.parse(ca));
+    render();
+
+    // Tabla de resultados en el panel #qa
+    const q = $('#qa');
+    q.style.display = 'block';
+    q.innerHTML = `
+      <h3>Pruebas de calidad</h3>
+      <p><b class="${okN === R.length ? 'pas' : 'fal'}">${okN} de ${R.length} pruebas aprobadas</b> (${Math.round(okN / R.length * 100)} %). Cada prueba usa el simulador real y luego restaura tu práctica.</p>
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>Tipo</th>
+          <th>Caso de prueba</th>
+          <th>Esperado</th>
+          <th>Obtenido</th>
+          <th>Estado</th>
+        </tr>
+        ${R.map(r => `<tr>
+          <td>${r[0]}</td>
+          <td>${r[1]}</td>
+          <td>${r[2]}</td>
+          <td>${r[3]}</td>
+          <td>${r[4]}</td>
+          <td class="${r[5] ? 'pas' : 'fal'}">${r[5] ? 'APROBADA' : 'FALLIDA'}</td>
+        </tr>`).join('')}
+      </table>`;
+    q.scrollIntoView && q.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 12: REGISTRO DE LA COMUNICACIÓN (Enviar · Fin de Ruta · Contingente)
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Simula la transmisión según el tipo: 'x' Enviar · 'ruta' Fin de Ruta ·
+  // 'cont' Sincronismo Contingente. Sin cobertura guarda y avisa.
+  function runlog(m) {
+    if (S.off) {
+      // Sin internet: el contingente avisa; los demás guardan en el equipo
+      if (m === 'cont') {
+        S.dlg = null;
+        return toast('Aún sin cobertura. Inténtalo cuando recuperes internet.');
+      }
+      S.dlg = { k: 'c', t: 'Sin conexión', b: 'No hay cobertura. La información queda guardada en el equipo. Cuando recupere internet use Sincronismo Contingente.', btn: [['ACEPTAR', 'close']] };
+      return render();
+    }
+
+    S.dlg = null;
+    S.log = [];
+    S.logOk = false;
+    S.mode = m;
+    go('log');
+
+    // Líneas del registro, con extras según lo pendiente de enviar
+    const L = [m === 'ruta' ? 'Enviando compras del día…' : m === 'cont' ? 'Enviando información guardada localmente…' : 'Procesando datos…', 'Conectando al servidor…'];
+    if (S.altas.length) L.push('Enviando altas de clientes al CDA…', 'CDA → SAP: solicitud registrada');
+    if (S.cambios.length) L.push('Enviando cambios de producto…');
+    L.push('Información enviada correctamente', 'ArcaApi: Token obtenido', 'Actualizar pedidos enviados OK');
+    if (m === 'ruta') L.push('Visita de ruta cerrada');
+
+    // Pinta cada línea con medio segundo de separación; al final, OK
+    L.forEach((l, i) => setTimeout(() => {
+      if (S.scr === 'log') {
+        S.log.push(l);
+        render();
+      }
+    }, 500 * (i + 1)));
+    setTimeout(() => {
+      if (S.scr === 'log') {
+        S.logOk = true;
+        render();
+      }
+    }, 500 * (L.length + 1));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 13: ACCIONES DEL USUARIO (mapa data-a → función)
+     Cada elemento de la pantalla lleva data-a="acción" y opcionalmente
+     data-v="valor". Un único listener global las despacha (sección 14).
+     ══════════════════════════════════════════════════════════════════════ */
+
+  const A = {
+
+    /* ── Navegación general ── */
+
+    // Reinicia toda la práctica (estado de fábrica)
+    reset: init,
+
+    // Inicia sesión y va al menú principal
+    login: () => { S.sync = false; go('menu'); },
+
+    // Vuelve atrás; si hay un diálogo abierto, lo cierra
+    back: () => {
+      if (S.dlg) {
+        S.dlg = null;
+        render();
+      } else if (S.scr !== 'log' && S.h.length) {
+        S.scr = S.h.pop();
+        render();
+      }
+    },
+
+    // Vuelve al menú principal desde cualquier pantalla
+    home: () => {
+      if (S.scr !== 'login' && S.scr !== 'log') {
+        S.dlg = null;
+        S.h = ['login'];
+        S.scr = 'menu';
+        render();
+      }
+    },
+
+    // Función no usada en la práctica: muestra un aviso informativo
+    na: v => toast(v || 'Esta función no se usa en la práctica.'),
+
+    // Abre "Tipo de comunicación"
+    sync: () => go('sync'),
+
+    /* ── Clientes ── */
+
+    // Abre la lista de clientes; si la ruta está cerrada, avisa
+    clients: () => {
+      if (S.closed) {
+        S.dlg = { k: 'c', t: 'Ruta cerrada', b: 'Ya se hizo Fin de Ruta. Debe sincronizar nuevamente para continuar con los clientes.', btn: [['CANCELAR', 'close'], ['SINCRONIZAR', 'gosync']] };
+        render();
+      } else go('clients');
+    },
+
+    // Desde el aviso "Ruta cerrada": ir a sincronizar
+    gosync: () => { S.dlg = null; go('sync'); },
+
+    // Abre el formulario de alta de cliente nuevo
+    alta: () => { S.alta = { f: [] }; go('alta'); },
+
+    // Entra al panel del cliente elegido (data-v = índice)
+    cli: v => { S.cur = +v; go('panel'); },
+
+    // Cierra el lector de código y confirma identificación
+    scanok: () => { S.dlg = null; go('panel'); toast('Cliente identificado por código y GPS'); },
+
+    // Abre la pantalla de motivo sin sticker
+    nocode: () => { S.dlg = null; S.mot = null; go('motivo'); },
+
+    // Marca el motivo elegido
+    mot: v => { S.mot = v; render(); },
+
+    // Guarda el motivo y regresa al panel del cliente
+    savemot: () => {
+      if (!S.mot) return toast('Elige un motivo primero');
+      S.scr = S.h.pop();
+      toast('Motivo guardado: ' + S.mot);
+    },
+
+    // Abre las transacciones del cliente
+    trans: () => go('trans'),
+
+    // Consulta Pedidos Digitales (app Tu Aliado)
+    dig: () => {
+      S.dlg = { k: 'x', t: 'Aviso', b: 'Actualizando pedidos bajo demanda…' };
+      render();
+      setTimeout(() => { S.dlg = null; toast('Sin pedidos digitales nuevos'); }, 1400);
+    },
+
+    // Registra No Pedido o No Visita (data-v = mensaje)
+    nop: v => {
+      S.C[S.cur].st = -1;
+      S.h = ['login', 'menu'];
+      S.scr = 'clients';
+      toast(v);
+    },
+
+    /* ── Pedido ── */
+
+    // Inicia un pedido: cronómetro, fila vacía y promociones
+    ped: () => {
+      S.t0 = Date.now();
+      S.rows = [{ k: '', c: '', b: '' }];
+      S.pg = 0;
+      S.psel = 0;
+      go('ped');
+      S.dlg = { k: 'promo' };
+      render();
+    },
+
+    // Abre el diálogo de promociones del cliente
+    promo: () => { S.dlg = { k: 'promo' }; render(); },
+
+    // Selecciona la promoción a detallar
+    psel: v => { S.psel = +v; render(); },
+
+    // Cierra el diálogo actual
+    close: () => { S.dlg = null; render(); },
+
+    // Cambia de página con los puntos (saldos ↔ levantamiento)
+    pg: v => { S.pg = +v; render(); },
+
+    // Agrega una fila de producto al pedido
+    add: () => {
+      S.rows.push({ k: '', c: '', b: '' });
+      render();
+      setTimeout(() => { const e = $('#k' + (S.rows.length - 1)); e && e.focus(); }, 30);
+    },
+
+    // Elimina una fila del pedido
+    del: v => {
+      S.rows.splice(+v, 1);
+      if (!S.rows.length) S.rows.push({ k: '', c: '', b: '' });
+      render();
+    },
+
+    // Valida las filas (SKU y cantidades) y va al resumen
+    ok: () => {
+      const L = S.rows.filter(r => r.k || r.c || r.b);
+      if (!L.length) return toast('Agregue al menos un producto');
+      for (const r of L) {
+        if (!CAT[r.k]) return toast('El SKU ' + (r.k || 'vacío') + ' no existe. Prueba 123 a 128');
+        if ((+r.c || 0) <= 0 && (+r.b || 0) <= 0) return toast('Debe existir una cantidad en cajas o botellas como mínimo.');
+      }
+      go('resumen');
+    },
+
+    // Confirma el pedido, mide el tiempo y vuelve a la ruta
+    confirm: () => {
+      S.lastT = (Date.now() - (S.t0 || Date.now())) / 1000;
+      S.C[S.cur].ord = { rows: S.rows.filter(r => r.k).map(r => ({ k: r.k, c: +r.c || 0, b: +r.b || 0 })) };
+      S.C[S.cur].st = 1;
+      S.h = ['login'];
+      S.scr = 'menu';
+      toast('Pedido confirmado. Ahora Sincronizar › Enviar.');
+    },
+
+    /* ── Alta de cliente ── */
+
+    // Valida el DNI, nombre, dirección y documentos; guarda
+    savealta: () => {
+      const a = S.alta;
+      if (!/^\d{8}$/.test(a.dni || '')) return toast('El DNI debe tener 8 dígitos');
+      if (!(a.n || '').trim()) return toast('Falta nombres y apellidos');
+      if (!(a.d || '').trim()) return toast('Falta la dirección de la tienda');
+      if (!a.f[0] || !a.f[1]) return toast('Adjunta el recibo de luz o agua y la foto del DNI');
+      S.altas.push({ n: a.n.trim().toUpperCase() });
+      S.h.pop();
+      S.scr = 'clients';
+      toast('Solicitud guardada. Se envía al CDA al sincronizar.');
+    },
+
+    /* ── Comunicación (Enviar · Fin de Ruta · Contingente) ── */
+
+    // Diálogo de confirmación del Fin de Ruta
+    finq: () => {
+      S.dlg = { k: 'c', t: 'Fin de Ruta', b: 'Se enviarán las compras del día y se cerrará la ruta. ¿Desea continuar?', btn: [['CANCELAR', 'close'], ['ACEPTAR', 'runruta']] };
+      render();
+    },
+
+    // Ejecuta la comunicación de Fin de Ruta
+    runruta: () => runlog('ruta'),
+
+    // Simula o recupera la cobertura de internet
+    off: () => {
+      S.off = !S.off;
+      toast(S.off ? 'Sin cobertura: todo se guarda en el equipo' : 'Internet recuperado: usa Sincronismo Contingente');
+    },
+
+    // Diálogo de confirmación del Sincronismo Contingente
+    cont: () => {
+      S.dlg = { k: 'c', t: 'Sincronismo Contingente', b: 'Se enviará todo lo guardado en el equipo. ¿Desea continuar?', btn: [['CANCELAR', 'close'], ['ACEPTAR', 'runcont']] };
+      render();
+    },
+
+    // Ejecuta la comunicación contingente
+    runcont: () => runlog('cont'),
+
+    // Muestra las promociones vigentes de la ruta
+    promos: () => go('promos'),
+
+    // Abre las prioridades de marketing (ICE)
+    ice: () => go('ice'),
+
+    // Abre la lista de saldos (créditos) de los clientes
+    saldos: () => go('saldos'),
+
+    // Abre el resumen del día (bodegas y litros por marca)
+    resdia: () => go('resdia'),
+
+    // Abre el resumen mensual (bodegas y litros acumulados)
+    resmes: () => go('resmes'),
+
+    // Abre el detalle de cumplimiento mensual
+    cump: () => go('cump'),
+
+    // Abre el inventario de equipo frío
+    frio: () => go('frio'),
+
+    // Diálogo "¿Desea realizar esta operación?" al Enviar
+    send: () => {
+      S.dlg = { k: 'c', t: 'AC Móvil', b: '¿Desea realizar esta operación?', btn: [['CANCELAR', 'close'], ['ACEPTAR', 'run']] };
+      render();
+    },
+
+    // Ejecuta la comunicación de Enviar
+    run: () => runlog('x'),
+
+    // Cierra el envío: aplica estados, alta de clientes y muestra el CDA
+    fin: () => {
+      const nw = S.C.filter(c => c.st === 1).map(c => c.n),
+            cam = S.cambios,
+            al = S.altas.map(a => a.n);
+      S.C.forEach(c => { if (c.st === 1) c.st = 2 });
+      const nn = S.altas.length;
+      S.cambios = [];
+      S.altas.forEach(a => {
+        S.C.unshift({ n: a.n, t: 'CLIENTE NUEVO', st: 0, nuevo: true });
+        S.extra++;
+      });
+      S.altas = [];
+      showCda(nw, cam, al);
+      if (S.mode === 'ruta') {
+        S.closed = true;
+        S.h = ['login'];
+        S.scr = 'menu';
+        toast('Ruta cerrada. Para continuar debes sincronizar de nuevo.');
+      } else {
+        S.closed = false;
+        S.sync = true;
+        S.h = ['login', 'menu'];
+        S.scr = 'clients';
+        toast(nn ? 'Enviado. El cliente nuevo ya aparece en la lista.' : 'Enviado. Pasa al siguiente cliente.');
+      }
+    },
+
+    /* ── Cambio de producto ── */
+
+    // Inicia un cambio de producto con una fila vacía
+    cambio: () => { S.cr = [{ k: '', c: '', b: '', m: 'Merma' }]; go('cambio'); },
+
+    // Agrega una fila al cambio de producto
+    cadd: () => {
+      S.cr.push({ k: '', c: '', b: '', m: 'Merma' });
+      render();
+      setTimeout(() => { const e = $('#ck' + (S.cr.length - 1)); e && e.focus(); }, 30);
+    },
+
+    // Elimina una fila del cambio de producto
+    cdel: v => {
+      S.cr.splice(+v, 1);
+      if (!S.cr.length) S.cr.push({ k: '', c: '', b: '', m: 'Merma' });
+      render();
+    },
+
+    // Valida las filas del cambio y va a su resumen
+    cok: () => {
+      const L = S.cr.filter(r => r.k || r.c || r.b);
+      if (!L.length) return toast('Agregue al menos un producto');
+      for (const r of L) {
+        if (!CAT[r.k]) return toast('El SKU ' + (r.k || 'vacío') + ' no existe. Prueba 123 a 128');
+        if ((+r.c || 0) <= 0 && (+r.b || 0) <= 0) return toast('Debe existir una cantidad en cajas o botellas como mínimo.');
+      }
+      go('cresumen');
+    },
+
+    // Confirma el cambio: queda pendiente para el envío
+    cconfirm: () => {
+      S.cambios.push({ n: S.C[S.cur].n, rows: S.cr.filter(r => r.k) });
+      S.h = ['login'];
+      S.scr = 'menu';
+      toast('Cambio de producto guardado. Se envía al sincronizar.');
+    },
+
+    /* ── Pruebas de calidad ── */
+
+    // Ejecuta la suite de 23 pruebas de calidad
+    qa: () => runQA()
+  };
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SECCIÓN 14: ARRANQUE: DELEGACIÓN DE CLICS Y PRIMERA RENDERIZACIÓN
+     ══════════════════════════════════════════════════════════════════════ */
+
+  // Un solo listener: cualquier clic en un elemento con data-a ejecuta
+  // la acción A[data-a] pasándole data-v como valor.
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-a]');
+    if (el && A[el.dataset.a]) A[el.dataset.a](el.dataset.v);
+  });
+
+  // Primera renderización de la práctica
+  init();
+  </script>
+</body>
+</html>
