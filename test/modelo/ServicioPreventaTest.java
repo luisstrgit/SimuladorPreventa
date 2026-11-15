@@ -1,7 +1,7 @@
 package modelo;
 
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 public class ServicioPreventaTest {
 
@@ -10,7 +10,7 @@ public class ServicioPreventaTest {
     @Test
     public void testAutenticacionVendedor() {
         SesionVendedor sesion = new SesionVendedor("VEN-7101");
-        assertTrue(sesion.autenticar(), "Debe permitir asesor válido");
+        assertTrue("Debe permitir asesor válido", sesion.autenticar());
     }
 
     @Test
@@ -27,7 +27,7 @@ public class ServicioPreventaTest {
 
     @Test
     public void testCambioProducto() {
-        CambioProducto cambio = new CambioProducto("001", "Producto Vencido", 1);
-        assertTrue(cambio.getReporteCambio().contains("Producto Vencido"));
+        CambioProducto cambio = new CambioProducto("001", "Vencido", 1);
+        assertTrue(cambio.getReporteCambio().contains("VENCIDO"));
     }
 }
